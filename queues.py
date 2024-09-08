@@ -1,3 +1,6 @@
+# Copyright (C) 2024 Patel, Nimai <nimai.m.patel@gmail.com>
+# Author: Patel, Nimai <nimai.m.patel@gmail.com>
+
 from collections import defaultdict
 import math
 import random
@@ -32,7 +35,10 @@ server_1_busy = False
 server_2_busy = False
 
 total_jobs = 0
+
+completed_jobs = 0
 total_time_in_system = 0
+arrival_times_record = {}
 
 
 class Event:
@@ -113,6 +119,7 @@ def arrival():
     total_jobs += 1
     job_id = total_jobs
     print(f"Job {job_id} arrives at time {current_time:.2f}")
+    arrival_times_record[job_id] = current_time
 
     # Schedule the next arrival (Poisson process)
     inter_arrival_time = exponential_random(ARRIVAL_RATE)
@@ -175,13 +182,14 @@ def process_stage_2(job_id):
 
 def complete_stage_2(job_id):
     """Handles the completion of stage 2 for a job."""
-    global server_2_busy, total_time_in_system
+    global server_2_busy, total_time_in_system, completed_jobs
 
     print(f"Job {job_id} completes stage 2 at {current_time:.2f}")
     server_2_busy = False
 
     # Track total time in the system for the job
-    total_time_in_system += current_time
+    total_time_in_system += current_time - arrival_times_record.pop(job_id)
+    completed_jobs += 1
 
     # If there are more jobs waiting in queue for stage 2, start the next job
     if len(q2) > 0:
@@ -199,16 +207,16 @@ def main():
     queue_1_len = 0
     queue_2_len = 0
 
-    q1_map = defaultdict(lambda: 0)
-    q2_map = defaultdict(lambda: 0)
-    qq_map = defaultdict(lambda: 0)
+    q1_freq = defaultdict(lambda: 0)
+    q2_freq = defaultdict(lambda: 0)
+    overall_freq = defaultdict(lambda: 0)
     while not event_stack.is_empty() and current_time < SIM_TIME:
         event = event_stack.pop()
         current_time, event_type, job_id = event.time, event.type, event.job_id
         elapsed = current_time - start_time
-        q1_map[queue_1_len] += elapsed
-        q2_map[queue_2_len] += elapsed
-        qq_map[queue_1_len + queue_2_len] += elapsed
+        q1_freq[queue_1_len] += elapsed
+        q2_freq[queue_2_len] += elapsed
+        overall_freq[queue_1_len + queue_2_len] += elapsed
 
         queue_1_len = len(q1)
         queue_2_len = len(q2)
@@ -223,22 +231,27 @@ def main():
         else:
             assert False, "UNREACHABLE"
 
-    for length, freq in freq_to_prob(q1_map).items():
+    q1_probs = freq_to_prob(q1_freq)
+    for length, freq in q1_freq.items():
         print(length, freq)
 
     print()
 
-    for length, freq in freq_to_prob(q2_map).items():
+    q2_probs = freq_to_prob(q2_freq)
+    for length, freq in q2_freq.items():
         print(length, freq)
 
     print()
 
-    for length, freq in freq_to_prob(qq_map).items():
+    overall_probs = freq_to_prob(overall_freq)
+    for length, freq in overall_freq.items():
         print(length, freq)
 
-    average_time_in_system = total_time_in_system / total_jobs if total_jobs > 0 else 0
+    prove_johnsons_theorem(q1_probs, q2_probs, overall_probs)
+
+    average_time_in_system = total_time_in_system / completed_jobs
     print(f"\nTotal jobs processed: {total_jobs}")
-    print(f"Average time in system: {average_time_in_system:.2f} units of time")
+    print(f"Average time in system: {average_time_in_system} units of time")
 
 
 def freq_to_prob(freqs):
@@ -251,6 +264,22 @@ def freq_to_prob(freqs):
         result[lenght] = freqs[lenght] / total_freq
 
     return result
+
+
+def prove_johnsons_theorem(q1_probs, q2_probs, overall_probs):
+    result = {}
+    for length in overall_probs.keys():
+        result[length] = 0
+        for i in range(0, length + 1):
+            q1_len = i
+            q2_len = length - i
+
+            if q1_len in q1_probs and q2_len in q2_probs:
+                result[length] += q1_probs[q1_len] * q2_probs[q2_len]
+
+    print()
+    for k, v in overall_probs.items():
+        print(f"{k}, {v:.5f}, {result[k]:.5f}")
 
 
 if __name__ == "__main__":
