@@ -202,27 +202,26 @@ def main():
     q1_map = defaultdict(lambda: 0)
     q2_map = defaultdict(lambda: 0)
     qq_map = defaultdict(lambda: 0)
-    with open("queue-length-log.txt", "w") as f:
-        while not event_stack.is_empty() and current_time < SIM_TIME:
-            event = event_stack.pop()
-            current_time, event_type, job_id = event.time, event.type, event.job_id
-            elapsed = current_time - start_time
-            q1_map[queue_1_len] += elapsed
-            q2_map[queue_2_len] += elapsed
-            qq_map[queue_1_len + queue_2_len] += elapsed
+    while not event_stack.is_empty() and current_time < SIM_TIME:
+        event = event_stack.pop()
+        current_time, event_type, job_id = event.time, event.type, event.job_id
+        elapsed = current_time - start_time
+        q1_map[queue_1_len] += elapsed
+        q2_map[queue_2_len] += elapsed
+        qq_map[queue_1_len + queue_2_len] += elapsed
 
-            queue_1_len = len(q1)
-            queue_2_len = len(q2)
-            start_time = current_time
+        queue_1_len = len(q1)
+        queue_2_len = len(q2)
+        start_time = current_time
 
-            if event_type == EventType.ARRIVAL:
-                arrival()
-            elif event_type == EventType.COMPLETE_STAGE_1:
-                complete_stage_1(job_id)
-            elif event_type == EventType.COMPLETE_STAGE_2:
-                complete_stage_2(job_id)
-            else:
-                assert False, "UNREACHABLE"
+        if event_type == EventType.ARRIVAL:
+            arrival()
+        elif event_type == EventType.COMPLETE_STAGE_1:
+            complete_stage_1(job_id)
+        elif event_type == EventType.COMPLETE_STAGE_2:
+            complete_stage_2(job_id)
+        else:
+            assert False, "UNREACHABLE"
 
     for length, freq in freq_to_prob(q1_map).items():
         print(length, freq)
