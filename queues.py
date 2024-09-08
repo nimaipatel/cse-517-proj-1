@@ -6,10 +6,12 @@ from collections import defaultdict
 import math
 import random
 from enum import Enum
-from typing import List, Optional
+from typing import List, NewType, Optional
 
 
 random.seed(10)
+
+job_id_t = NewType('job_id_t', int)
 
 
 def exponential_random(mean: float):
@@ -28,23 +30,23 @@ SERVICE_TIME_STAGE_1 = 3
 SERVICE_TIME_STAGE_2 = 4
 SIM_TIME = 10000
 
-q1: List[int] = []
-q2: List[int] = []
+q1: List[job_id_t] = []
+q2: List[job_id_t] = []
 
-current_time = 0
+curr_time = 0
 
 server_1_busy = False
 server_2_busy = False
 
 total_jobs = 0
 
-completed_jobs = 0
-total_time_in_system: float = 0
-arrival_times_record: dict[int, float] = {}
+comp_jobs = 0
+total_sojourn_time: float = 0
+arrival_times: dict[job_id_t, float] = {}
 
 
 class Event:
-    def __init__(self, time: float, type: EventType, job_id: int):
+    def __init__(self, time: float, type: EventType, job_id: job_id_t):
         self.time = time
         self.type = type
         self.job_id = job_id
@@ -118,7 +120,7 @@ class EventStack:
         return event
 
 
-event_stack = EventStack()
+es = EventStack()
 
 
 def arrival():
@@ -126,14 +128,14 @@ def arrival():
     global total_jobs, server_1_busy
 
     total_jobs += 1
-    job_id = total_jobs
-    print(f"Job {job_id} arrives at time {current_time:.2f}")
-    arrival_times_record[job_id] = current_time
+    job_id = job_id_t(total_jobs)
+    print(f"Job {job_id} arrives at time {curr_time:.2f}")
+    arrival_times[job_id] = curr_time
 
     # Schedule the next arrival (Poisson process)
     inter_arrival_time = exponential_random(ARRIVAL_RATE)
-    event = Event(current_time + inter_arrival_time, EventType.ARRIVAL, job_id)
-    event_stack.insert(event)
+    event = Event(curr_time + inter_arrival_time, EventType.ARRIVAL, job_id)
+    es.insert(event)
 
     # If server for stage 1 is free, start processing the job
     if server_1_busy:
@@ -142,24 +144,24 @@ def arrival():
         process_stage_1(job_id)
 
 
-def process_stage_1(job_id: int):
+def process_stage_1(job_id: job_id_t):
     """Processes a job in stage 1."""
     global server_1_busy
     server_1_busy = True
 
-    print(f"Job {job_id} starts service at stage 1 at {current_time:.2f}")
+    print(f"Job {job_id} starts service at stage 1 at {curr_time:.2f}")
 
     # Schedule the completion of stage 1
     service_time_1 = exponential_random(SERVICE_TIME_STAGE_1)
-    event = Event(current_time + service_time_1, EventType.COMPLETE_STAGE_1, job_id)
-    event_stack.insert(event)
+    event = Event(curr_time + service_time_1, EventType.COMPLETE_STAGE_1, job_id)
+    es.insert(event)
 
 
-def complete_stage_1(job_id: int):
+def complete_stage_1(job_id: job_id_t):
     """Handles the completion of stage 1 for a job."""
     global server_1_busy, server_2_busy
 
-    print(f"Job {job_id} completes stage 1 at {current_time:.2f}")
+    print(f"Job {job_id} completes stage 1 at {curr_time:.2f}")
     server_1_busy = False
 
     # If server for stage 2 is free, move the job to stage 2
@@ -174,29 +176,29 @@ def complete_stage_1(job_id: int):
         process_stage_1(next_job_id)
 
 
-def process_stage_2(job_id: int):
+def process_stage_2(job_id: job_id_t):
     """Processes a job in stage 2."""
     global server_2_busy
     server_2_busy = True
 
-    print(f"Job {job_id} starts service at stage 2 at {current_time:.2f}")
+    print(f"Job {job_id} starts service at stage 2 at {curr_time:.2f}")
 
     # Schedule the completion of stage 2
     service_time_2 = exponential_random(SERVICE_TIME_STAGE_2)
-    event = Event(current_time + service_time_2, EventType.COMPLETE_STAGE_2, job_id)
-    event_stack.insert(event)
+    event = Event(curr_time + service_time_2, EventType.COMPLETE_STAGE_2, job_id)
+    es.insert(event)
 
 
-def complete_stage_2(job_id: int):
+def complete_stage_2(job_id: job_id_t):
     """Handles the completion of stage 2 for a job."""
-    global server_2_busy, total_time_in_system, completed_jobs
+    global server_2_busy, total_sojourn_time, comp_jobs
 
-    print(f"Job {job_id} completes stage 2 at {current_time:.2f}")
+    print(f"Job {job_id} completes stage 2 at {curr_time:.2f}")
     server_2_busy = False
 
     # Track total time in the system for the job
-    total_time_in_system += current_time - arrival_times_record.pop(job_id)
-    completed_jobs += 1
+    total_sojourn_time += curr_time - arrival_times.pop(job_id)
+    comp_jobs += 1
 
     # If there are more jobs waiting in queue for stage 2, start the next job
     if len(q2) > 0:
@@ -205,11 +207,11 @@ def complete_stage_2(job_id: int):
 
 
 def main():
-    global current_time
+    global curr_time
 
     # This is not an actual event
-    event = Event(0, EventType.ARRIVAL, -1)
-    event_stack.insert(event)
+    event = Event(0, EventType.ARRIVAL, job_id_t(-1))
+    es.insert(event)
 
     start_time = 0
     queue_1_len = 0
@@ -218,17 +220,17 @@ def main():
     q1_freq: defaultdict[int, float] = defaultdict(lambda: 0)
     q2_freq: defaultdict[int, float] = defaultdict(lambda: 0)
     overall_freq: defaultdict[int, float] = defaultdict(lambda: 0)
-    while not event_stack.is_empty() and current_time < SIM_TIME:
-        event = event_stack.pop()
-        current_time, event_type, job_id = event.time, event.type, event.job_id
-        elapsed = current_time - start_time
+    while not es.is_empty() and curr_time < SIM_TIME:
+        event = es.pop()
+        curr_time, event_type, job_id = event.time, event.type, event.job_id
+        elapsed = curr_time - start_time
         q1_freq[queue_1_len] += elapsed
         q2_freq[queue_2_len] += elapsed
         overall_freq[queue_1_len + queue_2_len] += elapsed
 
         queue_1_len = len(q1)
         queue_2_len = len(q2)
-        start_time = current_time
+        start_time = curr_time
 
         if event_type == EventType.ARRIVAL:
             arrival()
@@ -257,9 +259,9 @@ def main():
 
     prove_johnsons_theorem(q1_probs, q2_probs, overall_probs)
 
-    average_time_in_system = total_time_in_system / completed_jobs
+    average_time_in_system = total_sojourn_time / comp_jobs
     print(f"Total jobs inbound: {total_jobs}")
-    print(f"Total jobs completed: {completed_jobs}")
+    print(f"Total jobs completed: {comp_jobs}")
     print(f"Average time in system: {average_time_in_system} units of time")
 
 
