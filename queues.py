@@ -14,11 +14,6 @@ random.seed(10)
 job_id_t = NewType('job_id_t', int)
 
 
-def exponential_random(mean: float):
-    U = random.random()
-    return -math.log(1 - U) / mean
-
-
 class EventType(Enum):
     ARRIVAL = 0
     COMPLETE_STAGE_1 = 1
@@ -43,6 +38,11 @@ total_jobs = 0
 comp_jobs = 0
 total_sojourn_time: float = 0
 arrival_times: dict[job_id_t, float] = {}
+
+
+def exponential_random(mean: float):
+    U = random.random()
+    return -math.log(1 - U) / mean
 
 
 class Event:
