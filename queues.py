@@ -1,16 +1,18 @@
 # Copyright (C) 2024 Patel, Nimai <nimai.m.patel@gmail.com>
 # Author: Patel, Nimai <nimai.m.patel@gmail.com>
 
+from __future__ import annotations
 from collections import defaultdict
 import math
 import random
 from enum import Enum
+from typing import List, Optional
 
 
 random.seed(10)
 
 
-def exponential_random(mean):
+def exponential_random(mean: float):
     U = random.random()
     return -math.log(1 - U) / mean
 
@@ -26,8 +28,8 @@ SERVICE_TIME_STAGE_1 = 3
 SERVICE_TIME_STAGE_2 = 4
 SIM_TIME = 10000
 
-q1 = []
-q2 = []
+q1: List[int] = []
+q2: List[int] = []
 
 current_time = 0
 
@@ -37,22 +39,22 @@ server_2_busy = False
 total_jobs = 0
 
 completed_jobs = 0
-total_time_in_system = 0
-arrival_times_record = {}
+total_time_in_system: float = 0
+arrival_times_record: dict[int, float] = {}
 
 
 class Event:
-    def __init__(self, time, type, job_id):
+    def __init__(self, time: float, type: EventType, job_id: int):
         self.time = time
         self.type = type
         self.job_id = job_id
 
 
 class EventStackNode:
-    def __init__(self, event):
+    def __init__(self, event: Event):
         self.event = event
-        self.next = None
-        self.prev = None
+        self.next: Optional[EventStackNode] = None
+        self.prev: Optional[EventStackNode] = None
 
 
 class EventStack:
@@ -63,7 +65,7 @@ class EventStack:
     def is_empty(self):
         return self.head == None
 
-    def insert(self, event):
+    def insert(self, event: Event):
         node = EventStackNode(event)
 
         if self.is_empty():
@@ -71,12 +73,18 @@ class EventStack:
             self.tail = node
             return
 
+        assert (
+            self.head != None
+        ), "head cannot be None, we checked that the queue is not empty"
         if node.event.time <= self.head.event.time:
             node.next = self.head
             self.head.prev = node
             self.head = node
             return
 
+        assert (
+            self.tail != None
+        ), "tail cannot be None, we checked that the queue is not empty"
         if node.event.time >= self.tail.event.time:
             node.prev = self.tail
             self.tail.next = node
@@ -87,6 +95,9 @@ class EventStack:
         while curr and curr.event.time < node.event.time:
             curr = curr.next
 
+        assert (
+            curr != None
+        ), "curr can't be None, insertion at end of the stack is handled in O(1) already"
         node.next = curr
         node.prev = curr.prev
 
@@ -95,9 +106,7 @@ class EventStack:
         curr.prev = node
 
     def pop(self):
-        if self.is_empty():
-            raise IndexError("Pop from an empty priority queue")
-
+        assert self.head != None
         event = self.head.event
         self.head = self.head.next
 
@@ -133,7 +142,7 @@ def arrival():
         process_stage_1(job_id)
 
 
-def process_stage_1(job_id):
+def process_stage_1(job_id: int):
     """Processes a job in stage 1."""
     global server_1_busy
     server_1_busy = True
@@ -146,7 +155,7 @@ def process_stage_1(job_id):
     event_stack.insert(event)
 
 
-def complete_stage_1(job_id):
+def complete_stage_1(job_id: int):
     """Handles the completion of stage 1 for a job."""
     global server_1_busy, server_2_busy
 
@@ -165,7 +174,7 @@ def complete_stage_1(job_id):
         process_stage_1(next_job_id)
 
 
-def process_stage_2(job_id):
+def process_stage_2(job_id: int):
     """Processes a job in stage 2."""
     global server_2_busy
     server_2_busy = True
@@ -178,7 +187,7 @@ def process_stage_2(job_id):
     event_stack.insert(event)
 
 
-def complete_stage_2(job_id):
+def complete_stage_2(job_id: int):
     """Handles the completion of stage 2 for a job."""
     global server_2_busy, total_time_in_system, completed_jobs
 
@@ -198,16 +207,17 @@ def complete_stage_2(job_id):
 def main():
     global current_time
 
-    event = Event(0, EventType.ARRIVAL, None)
+    # This is not an actual event
+    event = Event(0, EventType.ARRIVAL, -1)
     event_stack.insert(event)
 
     start_time = 0
     queue_1_len = 0
     queue_2_len = 0
 
-    q1_freq = defaultdict(lambda: 0)
-    q2_freq = defaultdict(lambda: 0)
-    overall_freq = defaultdict(lambda: 0)
+    q1_freq: defaultdict[int, float] = defaultdict(lambda: 0)
+    q2_freq: defaultdict[int, float] = defaultdict(lambda: 0)
+    overall_freq: defaultdict[int, float] = defaultdict(lambda: 0)
     while not event_stack.is_empty() and current_time < SIM_TIME:
         event = event_stack.pop()
         current_time, event_type, job_id = event.time, event.type, event.job_id
@@ -253,8 +263,8 @@ def main():
     print(f"Average time in system: {average_time_in_system} units of time")
 
 
-def freq_to_prob(freqs):
-    result = {}
+def freq_to_prob(freqs: dict[int, float]) -> dict[int, float]:
+    result: dict[int, float] = {}
     total_freq = 0
     for _, freq in freqs.items():
         total_freq += freq
@@ -265,7 +275,11 @@ def freq_to_prob(freqs):
     return result
 
 
-def prove_johnsons_theorem(q1_probs, q2_probs, overall_probs):
+def prove_johnsons_theorem(
+    q1_probs: dict[int, float],
+    q2_probs: dict[int, float],
+    overall_probs: dict[int, float],
+):
     result = {}
     for length in overall_probs.keys():
         result[length] = 0
