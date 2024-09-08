@@ -83,16 +83,16 @@ class EventStack:
             self.tail = node
             return
 
-        current = self.head
-        while current and current.event.time < node.event.time:
-            current = current.next
+        curr = self.head
+        while curr and curr.event.time < node.event.time:
+            curr = curr.next
 
-        node.next = current
-        node.prev = current.prev
+        node.next = curr
+        node.prev = curr.prev
 
-        if current.prev:
-            current.prev.next = node
-        current.prev = node
+        if curr.prev:
+            curr.prev.next = node
+        curr.prev = node
 
     def pop(self):
         if self.is_empty():
@@ -127,11 +127,10 @@ def arrival():
     event_stack.insert(event)
 
     # If server for stage 1 is free, start processing the job
-    if not server_1_busy:
-        process_stage_1(job_id)
-    else:
-        # If the server is busy, the job has to wait in stage 1 queue
+    if server_1_busy:
         q1.append(job_id)
+    else:
+        process_stage_1(job_id)
 
 
 def process_stage_1(job_id):
@@ -155,11 +154,10 @@ def complete_stage_1(job_id):
     server_1_busy = False
 
     # If server for stage 2 is free, move the job to stage 2
-    if not server_2_busy:
-        process_stage_2(job_id)
-    else:
-        # Queue the job for stage 2
+    if server_2_busy:
         q2.append(job_id)
+    else:
+        process_stage_2(job_id)
 
     # If there are more jobs waiting in queue for stage 1, start the next job
     if len(q1) > 0:
