@@ -1,3 +1,4 @@
+from collections import defaultdict
 import math
 import random
 from enum import Enum
@@ -6,23 +7,29 @@ from enum import Enum
 random.seed(10)
 
 
+def exponential_random(mean):
+    U = random.random()
+    return -math.log(1 - U) / mean
+
+
 class EventType(Enum):
-    ARRIVE = 0
-    EXIT_QUEUE_1 = 1
-    EXIT_QUEUE_2 = 2
+    ARRIVAL = 0
+    COMPLETE_STAGE_1 = 1
+    COMPLETE_STAGE_2 = 2
 
 
-ARRIVAL_RATE = 3
-SERVICE_TIME_STAGE_1 = 5
-SERVICE_TIME_STAGE_2 = 7
-SIM_TIME = 50
+ARRIVAL_RATE = 1
+SERVICE_TIME_STAGE_1 = 3
+SERVICE_TIME_STAGE_2 = 4
+SIM_TIME = 10000
 
-queue_stage_2 = []
+q1 = []
+q2 = []
 
 current_time = 0
 
-server_stage_1_busy = False
-server_stage_2_busy = False
+server_1_busy = False
+server_2_busy = False
 
 total_jobs = 0
 total_time_in_system = 0
@@ -85,7 +92,6 @@ class EventStack:
         if self.is_empty():
             raise IndexError("Pop from an empty priority queue")
 
-        # Pop the head (lowest time stamp event)
         event = self.head.event
         self.head = self.head.next
 
@@ -97,120 +103,155 @@ class EventStack:
         return event
 
 
-# Priority queue to manage events
 event_stack = EventStack()
 
 
 def arrival():
     """Handles job arrival."""
-    global total_jobs, server_stage_1_busy
+    global total_jobs, server_1_busy
 
     total_jobs += 1
     job_id = total_jobs
     print(f"Job {job_id} arrives at time {current_time:.2f}")
 
     # Schedule the next arrival (Poisson process)
-    inter_arrival_time = random.expovariate(ARRIVAL_RATE)
-    event = Event(current_time + inter_arrival_time, EventType.ARRIVE, None)
+    inter_arrival_time = exponential_random(ARRIVAL_RATE)
+    event = Event(current_time + inter_arrival_time, EventType.ARRIVAL, None)
     event_stack.insert(event)
 
     # If server for stage 1 is free, start processing the job
-    if not server_stage_1_busy:
+    if not server_1_busy:
         process_stage_1(job_id)
     else:
         # If the server is busy, the job has to wait in stage 1 queue
-        queue_stage_2.append(job_id)
+        q1.append(job_id)
 
 
 def process_stage_1(job_id):
     """Processes a job in stage 1."""
-    global server_stage_1_busy
-    server_stage_1_busy = True
+    global server_1_busy
+    server_1_busy = True
 
     print(f"Job {job_id} starts service at stage 1 at {current_time:.2f}")
 
     # Schedule the completion of stage 1
-    service_time_1 = random.expovariate(1.0 / SERVICE_TIME_STAGE_1)
-    event = Event(current_time + service_time_1, EventType.EXIT_QUEUE_1, job_id)
+    service_time_1 = exponential_random(SERVICE_TIME_STAGE_1)
+    event = Event(current_time + service_time_1, EventType.COMPLETE_STAGE_1, job_id)
     event_stack.insert(event)
 
 
 def complete_stage_1(job_id):
     """Handles the completion of stage 1 for a job."""
-    global server_stage_1_busy, server_stage_2_busy
+    global server_1_busy, server_2_busy
 
     print(f"Job {job_id} completes stage 1 at {current_time:.2f}")
-    server_stage_1_busy = False
+    server_1_busy = False
 
     # If server for stage 2 is free, move the job to stage 2
-    if not server_stage_2_busy:
+    if not server_2_busy:
         process_stage_2(job_id)
     else:
         # Queue the job for stage 2
-        queue_stage_2.append(job_id)
+        q2.append(job_id)
 
     # If there are more jobs waiting in queue for stage 1, start the next job
-    if queue_stage_2:
-        next_job_id = queue_stage_2.pop(0)
+    if len(q1) > 0:
+        next_job_id = q1.pop(0)
         process_stage_1(next_job_id)
 
 
 def process_stage_2(job_id):
     """Processes a job in stage 2."""
-    global server_stage_2_busy
-    server_stage_2_busy = True
+    global server_2_busy
+    server_2_busy = True
 
     print(f"Job {job_id} starts service at stage 2 at {current_time:.2f}")
 
     # Schedule the completion of stage 2
-    service_time_2 = random.expovariate(1.0 / SERVICE_TIME_STAGE_2)
-    event = Event(current_time + service_time_2, EventType.EXIT_QUEUE_2, job_id)
+    service_time_2 = exponential_random(SERVICE_TIME_STAGE_2)
+    event = Event(current_time + service_time_2, EventType.COMPLETE_STAGE_2, job_id)
     event_stack.insert(event)
 
 
 def complete_stage_2(job_id):
     """Handles the completion of stage 2 for a job."""
-    global server_stage_2_busy, total_time_in_system
+    global server_2_busy, total_time_in_system
 
     print(f"Job {job_id} completes stage 2 at {current_time:.2f}")
-    server_stage_2_busy = False
+    server_2_busy = False
 
     # Track total time in the system for the job
     total_time_in_system += current_time
 
     # If there are more jobs waiting in queue for stage 2, start the next job
-    if queue_stage_2:
-        next_job_id = queue_stage_2.pop(0)
+    if len(q2) > 0:
+        next_job_id = q2.pop(0)
         process_stage_2(next_job_id)
 
 
 def main():
     global current_time
 
-    # Schedule the first job arrival to kick off the simulation
-    event = Event(0, EventType.ARRIVE, None)
+    event = Event(0, EventType.ARRIVAL, None)
     event_stack.insert(event)
 
-    # Run the simulation loop
-    while event_stack and current_time < SIM_TIME:
-        # Get the next event in the event queue (min-heap)
-        event = event_stack.pop()
-        current_time, event_type, job_id = event.time, event.type, event.job_id
+    start_time = 0
+    queue_1_len = 0
+    queue_2_len = 0
 
-        # Handle the event based on its type
-        if event_type == EventType.ARRIVE:
-            arrival()
-        elif event_type == EventType.EXIT_QUEUE_1:
-            complete_stage_1(job_id)
-        elif event_type == EventType.EXIT_QUEUE_2:
-            complete_stage_2(job_id)
-        else:
-            assert False, "UNREACHABLE"
+    q1_map = defaultdict(lambda: 0)
+    q2_map = defaultdict(lambda: 0)
+    qq_map = defaultdict(lambda: 0)
+    with open("queue-length-log.txt", "w") as f:
+        while not event_stack.is_empty() and current_time < SIM_TIME:
+            event = event_stack.pop()
+            current_time, event_type, job_id = event.time, event.type, event.job_id
+            elapsed = current_time - start_time
+            q1_map[queue_1_len] += elapsed
+            q2_map[queue_2_len] += elapsed
+            qq_map[queue_1_len + queue_2_len] += elapsed
 
-    # Print final statistics
+            queue_1_len = len(q1)
+            queue_2_len = len(q2)
+            start_time = current_time
+
+            if event_type == EventType.ARRIVAL:
+                arrival()
+            elif event_type == EventType.COMPLETE_STAGE_1:
+                complete_stage_1(job_id)
+            elif event_type == EventType.COMPLETE_STAGE_2:
+                complete_stage_2(job_id)
+            else:
+                assert False, "UNREACHABLE"
+
+    for length, freq in freq_to_prob(q1_map).items():
+        print(length, freq)
+
+    print()
+
+    for length, freq in freq_to_prob(q2_map).items():
+        print(length, freq)
+
+    print()
+
+    for length, freq in freq_to_prob(qq_map).items():
+        print(length, freq)
+
     average_time_in_system = total_time_in_system / total_jobs if total_jobs > 0 else 0
     print(f"\nTotal jobs processed: {total_jobs}")
     print(f"Average time in system: {average_time_in_system:.2f} units of time")
+
+
+def freq_to_prob(freqs):
+    result = {}
+    total_freq = 0
+    for _, freq in freqs.items():
+        total_freq += freq
+
+    for lenght, freq in freqs.items():
+        result[lenght] = freqs[lenght] / total_freq
+
+    return result
 
 
 if __name__ == "__main__":
