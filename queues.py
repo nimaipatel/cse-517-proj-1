@@ -123,7 +123,7 @@ def arrival():
 
     # Schedule the next arrival (Poisson process)
     inter_arrival_time = exponential_random(ARRIVAL_RATE)
-    event = Event(current_time + inter_arrival_time, EventType.ARRIVAL, None)
+    event = Event(current_time + inter_arrival_time, EventType.ARRIVAL, job_id)
     event_stack.insert(event)
 
     # If server for stage 1 is free, start processing the job
@@ -248,7 +248,8 @@ def main():
     prove_johnsons_theorem(q1_probs, q2_probs, overall_probs)
 
     average_time_in_system = total_time_in_system / completed_jobs
-    print(f"\nTotal jobs processed: {total_jobs}")
+    print(f"Total jobs inbound: {total_jobs}")
+    print(f"Total jobs completed: {completed_jobs}")
     print(f"Average time in system: {average_time_in_system} units of time")
 
 
