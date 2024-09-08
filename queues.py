@@ -34,7 +34,6 @@ server_1_busy = False
 server_2_busy = False
 
 total_jobs = 0
-
 comp_jobs = 0
 total_sojourn_time: float = 0
 arrival_times: dict[job_id_t, float] = {}
