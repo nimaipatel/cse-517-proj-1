@@ -150,9 +150,7 @@ def arrival():
 
     # Schedule the next arrival (Poisson process)
     inter_arrival_time = exponential_random(ARRIVAL_RATE)
-    next_arrival_event = Event(
-        clock + inter_arrival_time, EventType.ARRIVAL, job_id
-    )
+    next_arrival_event = Event(clock + inter_arrival_time, EventType.ARRIVAL, job_id)
     ES_Insert(es, next_arrival_event)
 
     # If server for stage 1 is free, start processing the job
@@ -258,6 +256,10 @@ def sim_run():
             complete_stage_2(event.job_id)
         else:
             assert False, "UNREACHABLE"
+
+    assert max(q1_freq.keys()) == len(q1_freq.keys()) - 1
+    assert max(q2_freq.keys()) == len(q2_freq.keys()) - 1
+    assert max(overall_freq.keys()) == len(overall_freq.keys()) - 1
 
     return q1_freq, q2_freq, overall_freq
 
