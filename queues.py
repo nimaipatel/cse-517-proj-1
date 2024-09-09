@@ -43,6 +43,12 @@ class EventStack:
 
 @dataclass
 class Simulation:
+    # Constants
+    ARRIVAL_RATE: float
+    SERVICE_RATE_1: float
+    SERVICE_RATE_2: float
+    DURATION: float
+
     # State
     clock: float = 0
     q1: List[job_id_t] = field(default_factory=list)
@@ -58,12 +64,6 @@ class Simulation:
     arrival_times: dict[job_id_t, float] = field(default_factory=dict)
 
 
-    # Constants
-    ARRIVAL_RATE = 1
-    SERVICE_TIME_STAGE_1 = 3
-    SERVICE_TIME_STAGE_2 = 4
-    SIM_TIME = 10000
-
 # Misc.
 event_log_file_handle = None
 
@@ -77,6 +77,13 @@ def log_event(job_id: job_id_t, event: EventType, time: float):
         event_log_file_handle.write("Job ID, Event Type, Event Time\n")
 
     event_log_file_handle.write(f"{job_id}, {event.name}, {time}\n")
+
+
+def close_event_log_file():
+    global event_log_file_handle
+
+    if event_log_file_handle != None:
+        event_log_file_handle.close()
 
 
 def exponential_random(mean: float) -> float:
@@ -166,7 +173,7 @@ def process_stage_1(s: Simulation, job_id: job_id_t):
     log_event(job_id, EventType.PROCESS_STAGE_1, s.clock)
 
     # Schedule the completion of stage 1
-    serv_time = exponential_random(s.SERVICE_TIME_STAGE_1)
+    serv_time = exponential_random(s.SERVICE_RATE_1)
     event = Event(s.clock + serv_time, EventType.COMPLETE_STAGE_1, job_id)
     ES_Insert(s.es, event)
 
@@ -193,7 +200,7 @@ def process_stage_2(s: Simulation, job_id: job_id_t):
     log_event(job_id, EventType.PROCESS_STAGE_2, s.clock)
 
     # Schedule the completion of stage 2
-    serv_time = exponential_random(s.SERVICE_TIME_STAGE_2)
+    serv_time = exponential_random(s.SERVICE_RATE_2)
     event = Event(s.clock + serv_time, EventType.COMPLETE_STAGE_2, job_id)
     ES_Insert(s.es, event)
 
@@ -212,11 +219,6 @@ def complete_stage_2(s: Simulation, job_id: job_id_t):
         process_stage_2(s, next_job_id)
 
 
-def free_resources():
-    if event_log_file_handle != None:
-        event_log_file_handle.close()
-
-
 def sim_run(s: Simulation):
 
     prev_time = 0
@@ -228,7 +230,7 @@ def sim_run(s: Simulation):
     overall_freq: defaultdict[int, float] = defaultdict(lambda: 0)
 
     arrival(s)
-    while not ES_Is_Empty(s.es) and s.clock < s.SIM_TIME:
+    while not ES_Is_Empty(s.es) and s.clock < s.DURATION:
         event = ES_Pop(s.es)
         s.clock = event.time
 
@@ -260,7 +262,7 @@ def sim_run(s: Simulation):
 def main():
     random.seed(10)
 
-    s = Simulation()
+    s = Simulation(ARRIVAL_RATE=1, SERVICE_RATE_1=3, SERVICE_RATE_2=4, DURATION=10000)
 
     q1_freq, q2_freq, overall_freq = sim_run(s)
 
@@ -295,7 +297,7 @@ def main():
     print(f"Total jobs completed: {s.comp_jobs}")
     print(f"Average time in system: {avg_sojourn_time} units of time")
 
-    free_resources()
+    close_event_log_file()
 
 
 def freq_to_prob(freq_dist: dict[int, float]) -> dict[int, float]:
