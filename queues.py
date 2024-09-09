@@ -6,7 +6,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 import math
 import random
-from enum import Enum
+from enum import Enum, auto
 from typing import List, NewType, Optional
 
 
@@ -14,11 +14,11 @@ job_id_t = NewType("job_id_t", int)
 
 
 class EventType(Enum):
-    ARRIVAL = 0
-    PROCESS_STAGE_1 = 1
-    COMPLETE_STAGE_1 = 2
-    PROCESS_STAGE_2 = 3
-    COMPLETE_STAGE_2 = 4
+    ARRIVAL = auto()
+    PROCESS_STAGE_1 = auto()
+    COMPLETE_STAGE_1 = auto()
+    PROCESS_STAGE_2 = auto()
+    COMPLETE_STAGE_2 = auto()
 
 
 @dataclass
@@ -151,7 +151,9 @@ def arrival():
 
     # Schedule the next arrival (Poisson process)
     inter_arrival_time = exponential_random(ARRIVAL_RATE)
-    next_arrival_event = Event(curr_time + inter_arrival_time, EventType.ARRIVAL, job_id)
+    next_arrival_event = Event(
+        curr_time + inter_arrival_time, EventType.ARRIVAL, job_id
+    )
     ES_Insert(es, next_arrival_event)
 
     # If server for stage 1 is free, start processing the job
@@ -227,7 +229,6 @@ def free_resources():
     if event_log_file_handle != None:
         event_log_file_handle.close()
 
-    
 
 def sim_run():
     global curr_time
@@ -264,7 +265,6 @@ def sim_run():
             assert False, "UNREACHABLE"
 
     return q1_freq, q2_freq, overall_freq
-
 
 
 def main():
