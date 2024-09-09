@@ -69,13 +69,8 @@ class Event:
 @dataclass
 class EventStackNode:
     event: Event
-    next: Optional[EventStackNode]
-    prev: Optional[EventStackNode]
-
-    def __init__(self, event: Event):
-        self.event = event
-        self.next = None
-        self.prev = None
+    next: Optional[EventStackNode] = None
+    prev: Optional[EventStackNode] = None
 
 
 def ES_Is_Empty(es: EventStack):
@@ -138,12 +133,8 @@ def ES_Pop(es: EventStack):
 
 @dataclass
 class EventStack:
-    head: Optional[EventStackNode]
-    tail: Optional[EventStackNode]
-
-    def __init__(self):
-        self.head = None
-        self.tail = None
+    head: Optional[EventStackNode] = None
+    tail: Optional[EventStackNode] = None
 
 
 es = EventStack()
