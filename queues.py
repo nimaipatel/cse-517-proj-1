@@ -276,19 +276,19 @@ def main():
     q2_probs = freq_to_prob(q2_freq)
     overall_probs = freq_to_prob(overall_freq)
 
-    print("Queue 1 length, probability")
+    print("Queue 1 Length, Probability")
     for length, freq in q1_probs.items():
         print(length, freq)
 
     print()
 
-    print("Queue 2 length, probability")
+    print("Queue 2 Length, Probability")
     for length, freq in q2_probs.items():
         print(length, freq)
 
     print()
 
-    print("System size, probability")
+    print("System Size, Probability")
     for length, freq in overall_probs.items():
         print(length, freq)
 
@@ -323,21 +323,21 @@ def freq_to_prob(freq_dist: dict[int, float]) -> dict[int, float]:
 def verify_johnsons_theorem(
     q1_probs: dict[int, float],
     q2_probs: dict[int, float],
-    overall_probs: dict[int, float],
+    measu_overall_probs: dict[int, float],
 ):
-    result = {}
-    for overall_len in overall_probs.keys():
-        result[overall_len] = 0
+    calcu_overall_probs = {}
+    for overall_len in measu_overall_probs.keys():
+        calcu_overall_probs[overall_len] = 0
         for i in range(0, overall_len + 1):
             q1_len = i
             q2_len = overall_len - i
 
             if q1_len in q1_probs and q2_len in q2_probs:
-                result[overall_len] += q1_probs[q1_len] * q2_probs[q2_len]
+                calcu_overall_probs[overall_len] += q1_probs[q1_len] * q2_probs[q2_len]
 
     print("System Size, Measured Probability, Calculated Probability")
-    for k, v in overall_probs.items():
-        print(f"{k}, {v:.5f}, {result[k]:.5f}")
+    for k, v in measu_overall_probs.items():
+        print(f"{k}, {v:.5f}, {calcu_overall_probs[k]:.5f}")
 
 
 if __name__ == "__main__":
