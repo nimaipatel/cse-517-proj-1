@@ -15,10 +15,10 @@ job_id_t = NewType("job_id_t", int)
 
 class EventType(Enum):
     ARRIVAL = auto()
-    PROCESS_STAGE_1 = auto()
-    COMPLETE_STAGE_1 = auto()
-    PROCESS_STAGE_2 = auto()
-    COMPLETE_STAGE_2 = auto()
+    START_SERVICE_1 = auto()
+    COMPLETE_SERVICE_1 = auto()
+    START_SERVICE_2 = auto()
+    COMPLETE_SERVICE_2 = auto()
 
 
 @dataclass
@@ -164,49 +164,49 @@ def arrival(s: Simulation):
     if s.server_1_busy:
         s.q1.append(job_id)
     else:
-        process_stage_1(s, job_id)
+        start_service_1(s, job_id)
 
 
-def process_stage_1(s: Simulation, job_id: job_id_t):
+def start_service_1(s: Simulation, job_id: job_id_t):
     s.server_1_busy = True
 
-    log_event(job_id, EventType.PROCESS_STAGE_1, s.clock)
+    log_event(job_id, EventType.START_SERVICE_1, s.clock)
 
     # Schedule the completion of stage 1
     serv_time = exponential_random(s.SERVICE_RATE_1)
-    event = Event(s.clock + serv_time, EventType.COMPLETE_STAGE_1, job_id)
+    event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_1, job_id)
     ES_Insert(s.es, event)
 
 
-def complete_stage_1(s: Simulation, job_id: job_id_t):
-    log_event(job_id, EventType.COMPLETE_STAGE_1, s.clock)
+def complete_service_1(s: Simulation, job_id: job_id_t):
+    log_event(job_id, EventType.COMPLETE_SERVICE_1, s.clock)
     s.server_1_busy = False
 
     # If server for stage 2 is free, move the job to stage 2
     if s.server_2_busy:
         s.q2.append(job_id)
     else:
-        process_stage_2(s, job_id)
+        start_service_2(s, job_id)
 
     # If there are more jobs waiting in queue for stage 1, start the next job
     if len(s.q1) > 0:
         next_job_id = s.q1.pop(0)
-        process_stage_1(s, next_job_id)
+        start_service_1(s, next_job_id)
 
 
-def process_stage_2(s: Simulation, job_id: job_id_t):
+def start_service_2(s: Simulation, job_id: job_id_t):
     s.server_2_busy = True
 
-    log_event(job_id, EventType.PROCESS_STAGE_2, s.clock)
+    log_event(job_id, EventType.START_SERVICE_2, s.clock)
 
     # Schedule the completion of stage 2
     serv_time = exponential_random(s.SERVICE_RATE_2)
-    event = Event(s.clock + serv_time, EventType.COMPLETE_STAGE_2, job_id)
+    event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_2, job_id)
     ES_Insert(s.es, event)
 
 
-def complete_stage_2(s: Simulation, job_id: job_id_t):
-    log_event(job_id, EventType.COMPLETE_STAGE_2, s.clock)
+def complete_service_2(s: Simulation, job_id: job_id_t):
+    log_event(job_id, EventType.COMPLETE_SERVICE_2, s.clock)
     s.server_2_busy = False
 
     # Track total time in the system for the job
@@ -216,11 +216,13 @@ def complete_stage_2(s: Simulation, job_id: job_id_t):
     # If there are more jobs waiting in queue for stage 2, start the next job
     if len(s.q2) > 0:
         next_job_id = s.q2.pop(0)
-        process_stage_2(s, next_job_id)
+        start_service_2(s, next_job_id)
 
 
-def sim_run(s: Simulation):
-
+def simulation_run(
+    s: Simulation,
+) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
+    """Runs the simulation and returns probability distributions for queue 1, queue 2 and overall system"""
     prev_time = 0
     prev_q1_len = 0
     prev_q2_len = 0
@@ -245,10 +247,10 @@ def sim_run(s: Simulation):
 
         if event.type == EventType.ARRIVAL:
             arrival(s)
-        elif event.type == EventType.COMPLETE_STAGE_1:
-            complete_stage_1(s, event.job_id)
-        elif event.type == EventType.COMPLETE_STAGE_2:
-            complete_stage_2(s, event.job_id)
+        elif event.type == EventType.COMPLETE_SERVICE_1:
+            complete_service_1(s, event.job_id)
+        elif event.type == EventType.COMPLETE_SERVICE_2:
+            complete_service_2(s, event.job_id)
         else:
             assert False, "UNREACHABLE"
 
@@ -264,7 +266,7 @@ def main():
 
     s = Simulation(ARRIVAL_RATE=1, SERVICE_RATE_1=3, SERVICE_RATE_2=4, DURATION=10000)
 
-    q1_freq, q2_freq, overall_freq = sim_run(s)
+    q1_freq, q2_freq, overall_freq = simulation_run(s)
 
     q1_probs = freq_to_prob(q1_freq)
     q2_probs = freq_to_prob(q2_freq)
