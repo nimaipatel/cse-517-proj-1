@@ -244,9 +244,9 @@ def sim_run():
         q2_freq[prev_q2_len] += elapsed
         overall_freq[prev_q1_len + prev_q2_len] += elapsed
 
+        prev_time = clock
         prev_q1_len = len(q1)
         prev_q2_len = len(q2)
-        prev_time = clock
 
         if event.type == EventType.ARRIVAL:
             arrival()
