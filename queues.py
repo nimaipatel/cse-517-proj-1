@@ -48,7 +48,7 @@ SERVICE_TIME_STAGE_2 = 4
 SIM_TIME = 10000
 
 # State
-curr_time: float = 0
+clock: float = 0
 q1: List[job_id_t] = []
 q2: List[job_id_t] = []
 server_1_busy = False
@@ -96,7 +96,7 @@ def ES_Insert(es: EventStack, event: Event):
 
     assert (
         es.head != None
-    ), "head cannot be None, we checked that the queue is not empty"
+    ), "head cannot be None, we checked that the event stack is not empty"
     if node.event.time <= es.head.event.time:
         node.next = es.head
         es.head.prev = node
@@ -105,7 +105,7 @@ def ES_Insert(es: EventStack, event: Event):
 
     assert (
         es.tail != None
-    ), "tail cannot be None, we checked that the queue is not empty"
+    ), "tail cannot be None, we checked that the event stack is not empty"
     if node.event.time >= es.tail.event.time:
         node.prev = es.tail
         es.tail.next = node
@@ -118,7 +118,7 @@ def ES_Insert(es: EventStack, event: Event):
 
     assert (
         curr != None
-    ), "curr can't be None, insertion at end of the stack is handled in O(1) already"
+    ), "curr can't be None, insertion at end of the event stack is handled in O(1) already"
     node.next = curr
     node.prev = curr.prev
 
@@ -141,18 +141,17 @@ def ES_Pop(es: EventStack):
 
 
 def arrival():
-    """Handles job arrival."""
     global total_jobs
 
     total_jobs += 1
     job_id = job_id_t(total_jobs)
-    log_event(job_id, EventType.ARRIVAL, curr_time)
-    arrival_times[job_id] = curr_time
+    log_event(job_id, EventType.ARRIVAL, clock)
+    arrival_times[job_id] = clock
 
     # Schedule the next arrival (Poisson process)
     inter_arrival_time = exponential_random(ARRIVAL_RATE)
     next_arrival_event = Event(
-        curr_time + inter_arrival_time, EventType.ARRIVAL, job_id
+        clock + inter_arrival_time, EventType.ARRIVAL, job_id
     )
     ES_Insert(es, next_arrival_event)
 
@@ -164,23 +163,21 @@ def arrival():
 
 
 def process_stage_1(job_id: job_id_t):
-    """Processes a job in stage 1."""
     global server_1_busy
     server_1_busy = True
 
-    log_event(job_id, EventType.PROCESS_STAGE_1, curr_time)
+    log_event(job_id, EventType.PROCESS_STAGE_1, clock)
 
     # Schedule the completion of stage 1
     serv_time = exponential_random(SERVICE_TIME_STAGE_1)
-    event = Event(curr_time + serv_time, EventType.COMPLETE_STAGE_1, job_id)
+    event = Event(clock + serv_time, EventType.COMPLETE_STAGE_1, job_id)
     ES_Insert(es, event)
 
 
 def complete_stage_1(job_id: job_id_t):
-    """Handles the completion of stage 1 for a job."""
     global server_1_busy
 
-    log_event(job_id, EventType.COMPLETE_STAGE_1, curr_time)
+    log_event(job_id, EventType.COMPLETE_STAGE_1, clock)
     server_1_busy = False
 
     # If server for stage 2 is free, move the job to stage 2
@@ -196,27 +193,25 @@ def complete_stage_1(job_id: job_id_t):
 
 
 def process_stage_2(job_id: job_id_t):
-    """Processes a job in stage 2."""
     global server_2_busy
     server_2_busy = True
 
-    log_event(job_id, EventType.PROCESS_STAGE_2, curr_time)
+    log_event(job_id, EventType.PROCESS_STAGE_2, clock)
 
     # Schedule the completion of stage 2
     serv_time = exponential_random(SERVICE_TIME_STAGE_2)
-    event = Event(curr_time + serv_time, EventType.COMPLETE_STAGE_2, job_id)
+    event = Event(clock + serv_time, EventType.COMPLETE_STAGE_2, job_id)
     ES_Insert(es, event)
 
 
 def complete_stage_2(job_id: job_id_t):
-    """Handles the completion of stage 2 for a job."""
     global server_2_busy, total_sojourn_time, comp_jobs
 
-    log_event(job_id, EventType.COMPLETE_STAGE_2, curr_time)
+    log_event(job_id, EventType.COMPLETE_STAGE_2, clock)
     server_2_busy = False
 
     # Track total time in the system for the job
-    total_sojourn_time += curr_time - arrival_times.pop(job_id)
+    total_sojourn_time += clock - arrival_times.pop(job_id)
     comp_jobs += 1
 
     # If there are more jobs waiting in queue for stage 2, start the next job
@@ -231,7 +226,7 @@ def free_resources():
 
 
 def sim_run():
-    global curr_time
+    global clock
 
     prev_time = 0
     prev_q1_len = 0
@@ -242,18 +237,18 @@ def sim_run():
     overall_freq: defaultdict[int, float] = defaultdict(lambda: 0)
 
     arrival()
-    while not ES_Is_Empty(es) and curr_time < SIM_TIME:
+    while not ES_Is_Empty(es) and clock < SIM_TIME:
         event = ES_Pop(es)
-        curr_time = event.time
+        clock = event.time
 
-        elapsed = curr_time - prev_time
+        elapsed = clock - prev_time
         q1_freq[prev_q1_len] += elapsed
         q2_freq[prev_q2_len] += elapsed
         overall_freq[prev_q1_len + prev_q2_len] += elapsed
 
         prev_q1_len = len(q1)
         prev_q2_len = len(q2)
-        prev_time = curr_time
+        prev_time = clock
 
         if event.type == EventType.ARRIVAL:
             arrival()
