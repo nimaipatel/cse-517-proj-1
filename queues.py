@@ -7,8 +7,9 @@ from dataclasses import dataclass, field
 import math
 import random
 from enum import Enum, auto
+import sys
 from typing import List, NewType, Optional
-
+import argparse
 
 job_id_t = NewType("job_id_t", int)
 
@@ -44,10 +45,10 @@ class EventStack:
 @dataclass
 class Simulation:
     # Constants
-    ARRIVAL_RATE: float
-    SERVICE_RATE_1: float
-    SERVICE_RATE_2: float
-    DURATION: float
+    duration: float
+    arrival_rate: float
+    service_rate_1: float
+    service_rate_2: float
 
     # State
     clock: float = 0
@@ -57,7 +58,7 @@ class Simulation:
     server_2_busy = False
     es = EventStack()
 
-    # Stats
+    # ...state for performance metrics
     total_jobs = 0
     comp_jobs = 0
     total_sojourn_time: float = 0
@@ -68,22 +69,29 @@ class Simulation:
 event_log_file_handle = None
 
 
+def open_event_log_file(sim_id: str):
+    global event_log_file_handle
+
+    file_name = f"event-log-{sim_id}.csv"
+    event_log_file_handle = open(file_name, "w")
+    event_log_file_handle.truncate(0)
+    event_log_file_handle.write("Job ID, Event Type, Event Time\n")
+
+    return file_name
+
+
 def log_event(job_id: job_id_t, event: EventType, time: float):
     global event_log_file_handle
 
-    if event_log_file_handle == None:
-        event_log_file_handle = open("event-log.csv", "w")
-        event_log_file_handle.truncate(0)
-        event_log_file_handle.write("Job ID, Event Type, Event Time\n")
-
+    assert event_log_file_handle != None
     event_log_file_handle.write(f"{job_id}, {event.name}, {time}\n")
 
 
 def close_event_log_file():
     global event_log_file_handle
 
-    if event_log_file_handle != None:
-        event_log_file_handle.close()
+    assert event_log_file_handle != None
+    event_log_file_handle.close()
 
 
 def exponential_random(mean: float) -> float:
@@ -149,14 +157,14 @@ def ES_Pop(es: EventStack):
     return event
 
 
-def arrival(s: Simulation):
+def Arrival(s: Simulation):
     s.total_jobs += 1
     job_id = job_id_t(s.total_jobs)
     log_event(job_id, EventType.ARRIVAL, s.clock)
     s.arrival_times[job_id] = s.clock
 
     # Schedule the next arrival (Poisson process)
-    inter_arrival_time = exponential_random(s.ARRIVAL_RATE)
+    inter_arrival_time = exponential_random(s.arrival_rate)
     next_arrival_event = Event(s.clock + inter_arrival_time, EventType.ARRIVAL, job_id)
     ES_Insert(s.es, next_arrival_event)
 
@@ -164,21 +172,21 @@ def arrival(s: Simulation):
     if s.server_1_busy:
         s.q1.append(job_id)
     else:
-        start_service_1(s, job_id)
+        Start_Service_1(s, job_id)
 
 
-def start_service_1(s: Simulation, job_id: job_id_t):
+def Start_Service_1(s: Simulation, job_id: job_id_t):
     s.server_1_busy = True
 
     log_event(job_id, EventType.START_SERVICE_1, s.clock)
 
     # Schedule the completion of stage 1
-    serv_time = exponential_random(s.SERVICE_RATE_1)
+    serv_time = exponential_random(s.service_rate_1)
     event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_1, job_id)
     ES_Insert(s.es, event)
 
 
-def complete_service_1(s: Simulation, job_id: job_id_t):
+def Complete_Service_1(s: Simulation, job_id: job_id_t):
     log_event(job_id, EventType.COMPLETE_SERVICE_1, s.clock)
     s.server_1_busy = False
 
@@ -186,26 +194,26 @@ def complete_service_1(s: Simulation, job_id: job_id_t):
     if s.server_2_busy:
         s.q2.append(job_id)
     else:
-        start_service_2(s, job_id)
+        Start_Service_2(s, job_id)
 
     # If there are more jobs waiting in queue for stage 1, start the next job
     if len(s.q1) > 0:
         next_job_id = s.q1.pop(0)
-        start_service_1(s, next_job_id)
+        Start_Service_1(s, next_job_id)
 
 
-def start_service_2(s: Simulation, job_id: job_id_t):
+def Start_Service_2(s: Simulation, job_id: job_id_t):
     s.server_2_busy = True
 
     log_event(job_id, EventType.START_SERVICE_2, s.clock)
 
     # Schedule the completion of stage 2
-    serv_time = exponential_random(s.SERVICE_RATE_2)
+    serv_time = exponential_random(s.service_rate_2)
     event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_2, job_id)
     ES_Insert(s.es, event)
 
 
-def complete_service_2(s: Simulation, job_id: job_id_t):
+def Complete_Service_2(s: Simulation, job_id: job_id_t):
     log_event(job_id, EventType.COMPLETE_SERVICE_2, s.clock)
     s.server_2_busy = False
 
@@ -216,10 +224,10 @@ def complete_service_2(s: Simulation, job_id: job_id_t):
     # If there are more jobs waiting in queue for stage 2, start the next job
     if len(s.q2) > 0:
         next_job_id = s.q2.pop(0)
-        start_service_2(s, next_job_id)
+        Start_Service_2(s, next_job_id)
 
 
-def simulation_run(
+def Simulation_Run(
     s: Simulation,
 ) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
     """Runs the simulation and returns probability distributions for queue 1, queue 2 and overall system"""
@@ -231,8 +239,8 @@ def simulation_run(
     q2_freq: defaultdict[int, float] = defaultdict(lambda: 0)
     overall_freq: defaultdict[int, float] = defaultdict(lambda: 0)
 
-    arrival(s)
-    while not ES_Is_Empty(s.es) and s.clock < s.DURATION:
+    Arrival(s)
+    while not ES_Is_Empty(s.es) and s.clock < s.duration:
         event = ES_Pop(s.es)
         s.clock = event.time
 
@@ -246,11 +254,11 @@ def simulation_run(
         prev_q2_len = len(s.q2)
 
         if event.type == EventType.ARRIVAL:
-            arrival(s)
+            Arrival(s)
         elif event.type == EventType.COMPLETE_SERVICE_1:
-            complete_service_1(s, event.job_id)
+            Complete_Service_1(s, event.job_id)
         elif event.type == EventType.COMPLETE_SERVICE_2:
-            complete_service_2(s, event.job_id)
+            Complete_Service_2(s, event.job_id)
         else:
             assert False, "UNREACHABLE"
 
@@ -261,12 +269,68 @@ def simulation_run(
     return q1_freq, q2_freq, overall_freq
 
 
+def Get_Config():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--duration", type=float)
+    parser.add_argument("--arrival-rate", type=float)
+    parser.add_argument("--service-rate-1", type=float)
+    parser.add_argument("--service-rate-2", type=float)
+    parser.add_argument("--rng-seed", type=int)
+
+    args = parser.parse_args()
+
+    if args.duration == None:
+        print("Duration not provided, using default value")
+        args.duration = 10_000
+    if args.arrival_rate == None:
+        print("Arrival rate not provided, using default value")
+        args.arrival_rate = 1
+    if args.service_rate_1 == None:
+        print("Queue 1 service rate not provided, using default value")
+        args.service_rate_1 = 3
+    if args.service_rate_2 == None:
+        print("Queue 2 service rate not provided, using default value")
+        args.service_rate_2 = 4
+    if args.rng_seed == None:
+        print("Seed for RNG not provided, using random seed")
+        args.rng_seed = random.randrange(sys.maxsize)
+
+    print()
+
+    print(f"Duration\t= {args.duration} seconds")
+    print(f"Arrival Rate\t= {args.arrival_rate} jobs/second")
+    print(f"Service Rate 1\t= {args.service_rate_1} jobs/second")
+    print(f"Service Rate 2\t= {args.service_rate_2} jobs/second")
+    print(f"RNG Seed\t= {args.rng_seed}")
+
+    print()
+
+    return (
+        args.duration,
+        args.arrival_rate,
+        args.service_rate_1,
+        args.service_rate_2,
+        args.rng_seed,
+    )
+
+
 def main():
-    random.seed(10)
+    duration, arrival_rate, service_rate_1, service_rate_2, rng_seed = Get_Config()
 
-    s = Simulation(ARRIVAL_RATE=1, SERVICE_RATE_1=3, SERVICE_RATE_2=4, DURATION=10000)
+    sim_id = f"{duration}-{arrival_rate}-{service_rate_1}-{service_rate_2}-{rng_seed}"
 
-    q1_freq, q2_freq, overall_freq = simulation_run(s)
+    event_log_file_name = open_event_log_file(sim_id)
+
+    s = Simulation(
+        duration=duration,
+        arrival_rate=arrival_rate,
+        service_rate_1=service_rate_1,
+        service_rate_2=service_rate_2,
+    )
+
+    random.seed(rng_seed)
+
+    q1_freq, q2_freq, overall_freq = Simulation_Run(s)
 
     q1_probs = freq_to_prob(q1_freq)
     q2_probs = freq_to_prob(q2_freq)
@@ -297,7 +361,15 @@ def main():
     avg_sojourn_time = s.total_sojourn_time / s.comp_jobs
     print(f"Total jobs inbound: {s.total_jobs}")
     print(f"Total jobs completed: {s.comp_jobs}")
-    print(f"Average time in system: {avg_sojourn_time} units of time")
+    print(f"Measured sojourn time\t= {avg_sojourn_time} seconds")
+    print(
+        f"Soujourn time Jackson's Thorem\t= {1 / (s.service_rate_1 - 1) + 1 / (s.service_rate_2 - 1)}"
+    )
+    print(f"Avg number of jobs (measured) = {expected_value(overall_probs)}")
+
+    print()
+
+    print(f"Refer {event_log_file_name} for event log")
 
     close_event_log_file()
 
@@ -314,6 +386,13 @@ def freq_to_prob(freq_dist: dict[int, float]) -> dict[int, float]:
         prob_dist[var] = freq_dist[var] / total_freq
 
     return prob_dist
+
+
+def expected_value(prob_dist: dict[int, float]) -> float:
+    exp_val = 0
+    for var, prob in prob_dist.items():
+        exp_val += var * prob
+    return exp_val
 
 
 def verify_johnsons_theorem(
