@@ -10,53 +10,15 @@ from enum import Enum
 from typing import List, NewType, Optional
 
 
-random.seed(10)
-
-event_log_file_handle = None
-
-
-def log_event(msg: str):
-    global event_log_file_handle
-
-    if event_log_file_handle == None:
-        event_log_file_handle = open("event.log", "w")
-        event_log_file_handle.truncate(0)
-
-    event_log_file_handle.write(msg)
-    event_log_file_handle.write("\n")
-
-
 job_id_t = NewType("job_id_t", int)
 
 
 class EventType(Enum):
     ARRIVAL = 0
-    COMPLETE_STAGE_1 = 1
-    COMPLETE_STAGE_2 = 2
-
-
-ARRIVAL_RATE = 1
-SERVICE_TIME_STAGE_1 = 3
-SERVICE_TIME_STAGE_2 = 4
-SIM_TIME = 10000
-
-q1: List[job_id_t] = []
-q2: List[job_id_t] = []
-
-curr_time: float = 0
-
-server_1_busy = False
-server_2_busy = False
-
-total_jobs = 0
-comp_jobs = 0
-total_sojourn_time: float = 0
-arrival_times: dict[job_id_t, float] = {}
-
-
-def exponential_random(mean: float) -> float:
-    U = random.random()
-    return -math.log(1 - U) / mean
+    PROCESS_STAGE_1 = 1
+    COMPLETE_STAGE_1 = 2
+    PROCESS_STAGE_2 = 3
+    COMPLETE_STAGE_2 = 4
 
 
 @dataclass
@@ -71,6 +33,53 @@ class EventStackNode:
     event: Event
     next: Optional[EventStackNode] = None
     prev: Optional[EventStackNode] = None
+
+
+@dataclass
+class EventStack:
+    head: Optional[EventStackNode] = None
+    tail: Optional[EventStackNode] = None
+
+
+# Constants
+ARRIVAL_RATE = 1
+SERVICE_TIME_STAGE_1 = 3
+SERVICE_TIME_STAGE_2 = 4
+SIM_TIME = 10000
+
+# State
+curr_time: float = 0
+q1: List[job_id_t] = []
+q2: List[job_id_t] = []
+server_1_busy = False
+server_2_busy = False
+es = EventStack()
+
+
+# Stats
+total_jobs = 0
+comp_jobs = 0
+total_sojourn_time: float = 0
+arrival_times: dict[job_id_t, float] = {}
+
+# Misc.
+event_log_file_handle = None
+
+
+def log_event(job_id: job_id_t, event: EventType, time: float):
+    global event_log_file_handle
+
+    if event_log_file_handle == None:
+        event_log_file_handle = open("event-log.csv", "w")
+        event_log_file_handle.truncate(0)
+        event_log_file_handle.write("Job ID, Event Type, Event Time\n")
+
+    event_log_file_handle.write(f"{job_id}, {event.name}, {time}\n")
+
+
+def exponential_random(mean: float) -> float:
+    U = random.random()
+    return -math.log(1 - U) / mean
 
 
 def ES_Is_Empty(es: EventStack):
@@ -131,28 +140,19 @@ def ES_Pop(es: EventStack):
     return event
 
 
-@dataclass
-class EventStack:
-    head: Optional[EventStackNode] = None
-    tail: Optional[EventStackNode] = None
-
-
-es = EventStack()
-
-
 def arrival():
     """Handles job arrival."""
-    global total_jobs, server_1_busy
+    global total_jobs
 
     total_jobs += 1
     job_id = job_id_t(total_jobs)
-    log_event(f"Job {job_id} arrives at time {curr_time:.2f}")
+    log_event(job_id, EventType.ARRIVAL, curr_time)
     arrival_times[job_id] = curr_time
 
     # Schedule the next arrival (Poisson process)
     inter_arrival_time = exponential_random(ARRIVAL_RATE)
-    event = Event(curr_time + inter_arrival_time, EventType.ARRIVAL, job_id)
-    ES_Insert(es, event)
+    next_arrival_event = Event(curr_time + inter_arrival_time, EventType.ARRIVAL, job_id)
+    ES_Insert(es, next_arrival_event)
 
     # If server for stage 1 is free, start processing the job
     if server_1_busy:
@@ -166,7 +166,7 @@ def process_stage_1(job_id: job_id_t):
     global server_1_busy
     server_1_busy = True
 
-    log_event(f"Job {job_id} starts service at stage 1 at {curr_time:.2f}")
+    log_event(job_id, EventType.PROCESS_STAGE_1, curr_time)
 
     # Schedule the completion of stage 1
     serv_time = exponential_random(SERVICE_TIME_STAGE_1)
@@ -176,9 +176,9 @@ def process_stage_1(job_id: job_id_t):
 
 def complete_stage_1(job_id: job_id_t):
     """Handles the completion of stage 1 for a job."""
-    global server_1_busy, server_2_busy
+    global server_1_busy
 
-    log_event(f"Job {job_id} completes stage 1 at {curr_time:.2f}")
+    log_event(job_id, EventType.COMPLETE_STAGE_1, curr_time)
     server_1_busy = False
 
     # If server for stage 2 is free, move the job to stage 2
@@ -198,7 +198,7 @@ def process_stage_2(job_id: job_id_t):
     global server_2_busy
     server_2_busy = True
 
-    log_event(f"Job {job_id} starts service at stage 2 at {curr_time:.2f}")
+    log_event(job_id, EventType.PROCESS_STAGE_2, curr_time)
 
     # Schedule the completion of stage 2
     serv_time = exponential_random(SERVICE_TIME_STAGE_2)
@@ -210,7 +210,7 @@ def complete_stage_2(job_id: job_id_t):
     """Handles the completion of stage 2 for a job."""
     global server_2_busy, total_sojourn_time, comp_jobs
 
-    log_event(f"Job {job_id} completes stage 2 at {curr_time:.2f}")
+    log_event(job_id, EventType.COMPLETE_STAGE_2, curr_time)
     server_2_busy = False
 
     # Track total time in the system for the job
@@ -227,33 +227,32 @@ def free_resources():
     if event_log_file_handle != None:
         event_log_file_handle.close()
 
+    
 
-def main():
+def sim_run():
     global curr_time
 
-    # This is not an actual event
-    event = Event(0, EventType.ARRIVAL, job_id_t(-1))
-    ES_Insert(es, event)
-
-    start_time = 0
-    queue_1_len = 0
-    queue_2_len = 0
+    prev_time = 0
+    prev_q1_len = 0
+    prev_q2_len = 0
 
     q1_freq: defaultdict[int, float] = defaultdict(lambda: 0)
     q2_freq: defaultdict[int, float] = defaultdict(lambda: 0)
     overall_freq: defaultdict[int, float] = defaultdict(lambda: 0)
+
+    arrival()
     while not ES_Is_Empty(es) and curr_time < SIM_TIME:
         event = ES_Pop(es)
         curr_time = event.time
 
-        elapsed = curr_time - start_time
-        q1_freq[queue_1_len] += elapsed
-        q2_freq[queue_2_len] += elapsed
-        overall_freq[queue_1_len + queue_2_len] += elapsed
+        elapsed = curr_time - prev_time
+        q1_freq[prev_q1_len] += elapsed
+        q2_freq[prev_q2_len] += elapsed
+        overall_freq[prev_q1_len + prev_q2_len] += elapsed
 
-        queue_1_len = len(q1)
-        queue_2_len = len(q2)
-        start_time = curr_time
+        prev_q1_len = len(q1)
+        prev_q2_len = len(q2)
+        prev_time = curr_time
 
         if event.type == EventType.ARRIVAL:
             arrival()
@@ -264,23 +263,40 @@ def main():
         else:
             assert False, "UNREACHABLE"
 
+    return q1_freq, q2_freq, overall_freq
+
+
+
+def main():
+    random.seed(10)
+
+    q1_freq, q2_freq, overall_freq = sim_run()
+
     q1_probs = freq_to_prob(q1_freq)
+    q2_probs = freq_to_prob(q2_freq)
+    overall_probs = freq_to_prob(overall_freq)
+
+    print("Queue 1 length, probability")
     for length, freq in q1_probs.items():
         print(length, freq)
 
     print()
 
-    q2_probs = freq_to_prob(q2_freq)
+    print("Queue 2 length, probability")
     for length, freq in q2_probs.items():
         print(length, freq)
 
     print()
 
-    overall_probs = freq_to_prob(overall_freq)
+    print("System size, probability")
     for length, freq in overall_probs.items():
         print(length, freq)
 
-    prove_johnsons_theorem(q1_probs, q2_probs, overall_probs)
+    print()
+
+    verify_johnsons_theorem(q1_probs, q2_probs, overall_probs)
+
+    print()
 
     avg_sojourn_time = total_sojourn_time / comp_jobs
     print(f"Total jobs inbound: {total_jobs}")
@@ -290,37 +306,36 @@ def main():
     free_resources()
 
 
-def freq_to_prob(freqs: dict[int, float]) -> dict[int, float]:
-    """Takes dictionary that maps queue length to frequency of that queue lenght
-    and returns dictionary that maps queue length to probablity of that queue
-    lenght"""
-    result: dict[int, float] = {}
+def freq_to_prob(freq_dist: dict[int, float]) -> dict[int, float]:
+    """Takes dictionary that stores frequency distribution and returns
+    dictionary that stores probability distribution"""
+    prob_dist: dict[int, float] = {}
     total_freq = 0
-    for _, freq in freqs.items():
+    for freq in freq_dist.values():
         total_freq += freq
 
-    for lenght, freq in freqs.items():
-        result[lenght] = freqs[lenght] / total_freq
+    for var, freq in freq_dist.items():
+        prob_dist[var] = freq_dist[var] / total_freq
 
-    return result
+    return prob_dist
 
 
-def prove_johnsons_theorem(
+def verify_johnsons_theorem(
     q1_probs: dict[int, float],
     q2_probs: dict[int, float],
     overall_probs: dict[int, float],
 ):
     result = {}
-    for length in overall_probs.keys():
-        result[length] = 0
-        for i in range(0, length + 1):
+    for overall_len in overall_probs.keys():
+        result[overall_len] = 0
+        for i in range(0, overall_len + 1):
             q1_len = i
-            q2_len = length - i
+            q2_len = overall_len - i
 
             if q1_len in q1_probs and q2_len in q2_probs:
-                result[length] += q1_probs[q1_len] * q2_probs[q2_len]
+                result[overall_len] += q1_probs[q1_len] * q2_probs[q2_len]
 
-    print()
+    print("System Size, Measured Probability, Calculated Probability")
     for k, v in overall_probs.items():
         print(f"{k}, {v:.5f}, {result[k]:.5f}")
 
