@@ -14,6 +14,20 @@ import argparse
 job_id_t = NewType("job_id_t", int)
 
 
+def ES_Assert_Valid(es: EventStack):
+    prev_time = -sys.maxsize
+    curr = es.head
+    while curr:
+        assert prev_time < curr.event.time
+        curr = curr.next
+
+    prev_time = sys.maxsize
+    curr = es.tail
+    while curr:
+        assert prev_time > curr.event.time
+        curr = curr.prev
+
+
 class EventType(Enum):
     ARRIVAL = auto()
     START_SERVICE_1 = auto()
@@ -96,7 +110,7 @@ def close_event_log_file():
 
 def exponential_random(mean: float) -> float:
     U = random.random()
-    return -math.log(1 - U) / mean
+    return -math.log(1 - U) * mean
 
 
 def ES_Is_Empty(es: EventStack):
@@ -164,7 +178,7 @@ def Arrival(s: Simulation):
     s.arrival_times[job_id] = s.clock
 
     # Schedule the next arrival (Poisson process)
-    inter_arrival_time = exponential_random(s.arrival_rate)
+    inter_arrival_time = exponential_random(1 / s.arrival_rate)
     next_arrival_event = Event(s.clock + inter_arrival_time, EventType.ARRIVAL, job_id)
     ES_Insert(s.es, next_arrival_event)
 
@@ -181,7 +195,7 @@ def Start_Service_1(s: Simulation, job_id: job_id_t):
     log_event(job_id, EventType.START_SERVICE_1, s.clock)
 
     # Schedule the completion of stage 1
-    serv_time = exponential_random(s.service_rate_1)
+    serv_time = exponential_random(1 / s.service_rate_1)
     event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_1, job_id)
     ES_Insert(s.es, event)
 
@@ -208,7 +222,7 @@ def Start_Service_2(s: Simulation, job_id: job_id_t):
     log_event(job_id, EventType.START_SERVICE_2, s.clock)
 
     # Schedule the completion of stage 2
-    serv_time = exponential_random(s.service_rate_2)
+    serv_time = exponential_random(1 / s.service_rate_2)
     event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_2, job_id)
     ES_Insert(s.es, event)
 
