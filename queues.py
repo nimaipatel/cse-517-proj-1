@@ -14,20 +14,6 @@ import argparse
 job_id_t = NewType("job_id_t", int)
 
 
-def ES_Assert_Valid(es: EventStack):
-    prev_time = -sys.maxsize
-    curr = es.head
-    while curr:
-        assert prev_time < curr.event.time
-        curr = curr.next
-
-    prev_time = sys.maxsize
-    curr = es.tail
-    while curr:
-        assert prev_time > curr.event.time
-        curr = curr.prev
-
-
 class EventType(Enum):
     ARRIVAL = auto()
     START_SERVICE_1 = auto()
