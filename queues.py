@@ -160,27 +160,25 @@ def ES_Pop(es: EventStack):
 def Arrival(s: Simulation):
     s.total_jobs += 1
     job_id = job_id_t(s.total_jobs)
-    log_event(job_id, EventType.ARRIVAL, s.clock)
     s.arrival_times[job_id] = s.clock
 
-    # Schedule the next arrival (Poisson process)
-    inter_arrival_time = exponential_random(1 / s.arrival_rate)
-    next_arrival_event = Event(s.clock + inter_arrival_time, EventType.ARRIVAL, job_id)
-    ES_Insert(s.es, next_arrival_event)
+    log_event(job_id, EventType.ARRIVAL, s.clock)
 
-    # If server for stage 1 is free, start processing the job
     if s.server_1_busy:
         s.q1.append(job_id)
     else:
         Start_Service_1(s, job_id)
 
+    inter_arrival_time = exponential_random(1 / s.arrival_rate)
+    next_arrival_event = Event(s.clock + inter_arrival_time, EventType.ARRIVAL, job_id)
+    ES_Insert(s.es, next_arrival_event)
+
 
 def Start_Service_1(s: Simulation, job_id: job_id_t):
-    s.server_1_busy = True
-
     log_event(job_id, EventType.START_SERVICE_1, s.clock)
 
-    # Schedule the completion of stage 1
+    s.server_1_busy = True
+
     serv_time = exponential_random(1 / s.service_rate_1)
     event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_1, job_id)
     ES_Insert(s.es, event)
@@ -188,26 +186,24 @@ def Start_Service_1(s: Simulation, job_id: job_id_t):
 
 def Complete_Service_1(s: Simulation, job_id: job_id_t):
     log_event(job_id, EventType.COMPLETE_SERVICE_1, s.clock)
+
     s.server_1_busy = False
 
-    # If server for stage 2 is free, move the job to stage 2
     if s.server_2_busy:
         s.q2.append(job_id)
     else:
         Start_Service_2(s, job_id)
 
-    # If there are more jobs waiting in queue for stage 1, start the next job
     if len(s.q1) > 0:
         next_job_id = s.q1.pop(0)
         Start_Service_1(s, next_job_id)
 
 
 def Start_Service_2(s: Simulation, job_id: job_id_t):
-    s.server_2_busy = True
-
     log_event(job_id, EventType.START_SERVICE_2, s.clock)
 
-    # Schedule the completion of stage 2
+    s.server_2_busy = True
+
     serv_time = exponential_random(1 / s.service_rate_2)
     event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_2, job_id)
     ES_Insert(s.es, event)
@@ -217,11 +213,9 @@ def Complete_Service_2(s: Simulation, job_id: job_id_t):
     log_event(job_id, EventType.COMPLETE_SERVICE_2, s.clock)
     s.server_2_busy = False
 
-    # Track total time in the system for the job
     s.total_sojourn_time += s.clock - s.arrival_times.pop(job_id)
     s.comp_jobs += 1
 
-    # If there are more jobs waiting in queue for stage 2, start the next job
     if len(s.q2) > 0:
         next_job_id = s.q2.pop(0)
         Start_Service_2(s, next_job_id)
