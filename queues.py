@@ -45,10 +45,10 @@ class EventStack:
 @dataclass
 class Simulation:
     # Constants
-    duration: float
-    arrival_rate: float
-    service_rate_1: float
-    service_rate_2: float
+    DURATION: float
+    ARRIVAL_RATE: float
+    SERVICE_RATE_1: float
+    SERVICE_RATE_2: float
 
     # State
     clock: float = 0
@@ -169,7 +169,7 @@ def Arrival(s: Simulation):
     else:
         Start_Service_1(s, job_id)
 
-    inter_arrival_time = exponential_random(1 / s.arrival_rate)
+    inter_arrival_time = exponential_random(1 / s.ARRIVAL_RATE)
     next_arrival_event = Event(s.clock + inter_arrival_time, EventType.ARRIVAL, job_id)
     ES_Insert(s.es, next_arrival_event)
 
@@ -179,7 +179,7 @@ def Start_Service_1(s: Simulation, job_id: job_id_t):
 
     s.server_1_busy = True
 
-    serv_time = exponential_random(1 / s.service_rate_1)
+    serv_time = exponential_random(1 / s.SERVICE_RATE_1)
     event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_1, job_id)
     ES_Insert(s.es, event)
 
@@ -204,7 +204,7 @@ def Start_Service_2(s: Simulation, job_id: job_id_t):
 
     s.server_2_busy = True
 
-    serv_time = exponential_random(1 / s.service_rate_2)
+    serv_time = exponential_random(1 / s.SERVICE_RATE_2)
     event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_2, job_id)
     ES_Insert(s.es, event)
 
@@ -234,7 +234,7 @@ def Simulation_Run(
     overall_freq: defaultdict[int, float] = defaultdict(lambda: 0)
 
     Arrival(s)
-    while not ES_Is_Empty(s.es) and s.clock < s.duration:
+    while not ES_Is_Empty(s.es) and s.clock < s.DURATION:
         event = ES_Pop(s.es)
         s.clock = event.time
 
@@ -316,10 +316,10 @@ def main():
     event_log_file_name = open_event_log_file(sim_id)
 
     s = Simulation(
-        duration=duration,
-        arrival_rate=arrival_rate,
-        service_rate_1=service_rate_1,
-        service_rate_2=service_rate_2,
+        DURATION=duration,
+        ARRIVAL_RATE=arrival_rate,
+        SERVICE_RATE_1=service_rate_1,
+        SERVICE_RATE_2=service_rate_2,
     )
 
     random.seed(rng_seed)
@@ -348,7 +348,7 @@ def main():
 
     print()
 
-    verify_johnsons_theorem(q1_probs, q2_probs, overall_probs)
+    verify_jacksons_theorem(q1_probs, q2_probs, overall_probs)
 
     print()
 
@@ -357,7 +357,7 @@ def main():
     print(f"Total jobs completed: {s.comp_jobs}")
     print(f"Measured sojourn time\t= {avg_sojourn_time} seconds")
     print(
-        f"Soujourn time Jackson's Thorem\t= {1 / (s.service_rate_1 - 1) + 1 / (s.service_rate_2 - 1)}"
+        f"Soujourn time Jackson's Thorem\t= {1 / (s.SERVICE_RATE_1 - 1) + 1 / (s.SERVICE_RATE_2 - 1)}"
     )
     print(f"Avg number of jobs (measured) = {expected_value(overall_probs)}")
 
@@ -389,7 +389,7 @@ def expected_value(prob_dist: dict[int, float]) -> float:
     return exp_val
 
 
-def verify_johnsons_theorem(
+def verify_jacksons_theorem(
     q1_probs: dict[int, float],
     q2_probs: dict[int, float],
     measu_overall_probs: dict[int, float],
