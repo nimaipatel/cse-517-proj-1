@@ -225,9 +225,8 @@ def Simulation_Run(
     s: Simulation,
 ) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
     """Runs the simulation and returns probability distributions for queue 1, queue 2 and overall system"""
-    prev_time = 0
-    prev_q1_len = 0
-    prev_q2_len = 0
+    q1_len = 0
+    q2_len = 0
 
     q1_freq: defaultdict[int, float] = defaultdict(lambda: 0)
     q2_freq: defaultdict[int, float] = defaultdict(lambda: 0)
@@ -236,16 +235,15 @@ def Simulation_Run(
     Arrival(s)
     while not ES_Is_Empty(s.es) and s.clock < s.DURATION:
         event = ES_Pop(s.es)
+
+        elapsed = event.time - s.clock
+        q1_freq[q1_len] += elapsed
+        q2_freq[q2_len] += elapsed
+        overall_freq[q1_len + q2_len] += elapsed
+
         s.clock = event.time
-
-        elapsed = s.clock - prev_time
-        q1_freq[prev_q1_len] += elapsed
-        q2_freq[prev_q2_len] += elapsed
-        overall_freq[prev_q1_len + prev_q2_len] += elapsed
-
-        prev_time = s.clock
-        prev_q1_len = len(s.q1)
-        prev_q2_len = len(s.q2)
+        q1_len = len(s.q1)
+        q2_len = len(s.q2)
 
         if event.type == EventType.ARRIVAL:
             Arrival(s)
@@ -330,24 +328,6 @@ def main():
     q2_probs = freq_to_prob(q2_freq)
     overall_probs = freq_to_prob(overall_freq)
 
-    print("Queue 1 Length, Probability")
-    for length, freq in q1_probs.items():
-        print(length, freq)
-
-    print()
-
-    print("Queue 2 Length, Probability")
-    for length, freq in q2_probs.items():
-        print(length, freq)
-
-    print()
-
-    print("System Size, Probability")
-    for length, freq in overall_probs.items():
-        print(length, freq)
-
-    print()
-
     verify_jacksons_theorem(q1_probs, q2_probs, overall_probs)
 
     print()
@@ -355,9 +335,9 @@ def main():
     avg_sojourn_time = s.total_sojourn_time / s.comp_jobs
     print(f"Total jobs inbound: {s.total_jobs}")
     print(f"Total jobs completed: {s.comp_jobs}")
-    print(f"Measured sojourn time\t= {avg_sojourn_time} seconds")
+    print(f"Measured Sojourn Time\t= {avg_sojourn_time} seconds")
     print(
-        f"Soujourn time Jackson's Thorem\t= {1 / (s.SERVICE_RATE_1 - 1) + 1 / (s.SERVICE_RATE_2 - 1)}"
+        f"Expected Sojourn Time\t= {1 / (s.SERVICE_RATE_1 - s.ARRIVAL_RATE) + 1 / (s.SERVICE_RATE_2 - s.ARRIVAL_RATE)}"
     )
     print(f"Avg number of jobs (measured) = {expected_value(overall_probs)}")
 
@@ -394,7 +374,7 @@ def verify_jacksons_theorem(
     q2_probs: dict[int, float],
     measu_overall_probs: dict[int, float],
 ):
-    calcu_overall_probs = {}
+    calcu_overall_probs: dict[int, float] = {}
     for overall_len in measu_overall_probs.keys():
         calcu_overall_probs[overall_len] = 0
         for i in range(0, overall_len + 1):
@@ -404,9 +384,27 @@ def verify_jacksons_theorem(
             if q1_len in q1_probs and q2_len in q2_probs:
                 calcu_overall_probs[overall_len] += q1_probs[q1_len] * q2_probs[q2_len]
 
-    print("System Size, Measured Probability, Calculated Probability")
-    for k, v in measu_overall_probs.items():
-        print(f"{k}, {v:.5f}, {calcu_overall_probs[k]:.5f}")
+    print(
+        "Size",
+        "Queue 1",
+        "Queue 2",
+        "Overall",
+        "Overall (calculated)",
+        sep="\t",
+    )
+
+    most_len = max(
+        len(q1_probs), len(q2_probs), len(measu_overall_probs), len(calcu_overall_probs)
+    )
+    for i in range(most_len + 1):
+        print(
+            i,
+            "{:.5f}".format(q1_probs.get(i, 0)),
+            "{:.5f}".format(q2_probs.get(i, 0)),
+            "{:.5f}".format(measu_overall_probs.get(i, 0)),
+            "{:.5f}".format(calcu_overall_probs.get(i, 0)),
+            sep="\t",
+        )
 
 
 if __name__ == "__main__":
