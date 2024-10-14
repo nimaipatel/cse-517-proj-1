@@ -1,5 +1,24 @@
+#!/usr/bin/env python3
+
 # Copyright (C) 2024 Patel, Nimai <nimai.m.patel@gmail.com>
 # Author: Patel, Nimai <nimai.m.patel@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# pyright: strict
+
+# This program has been developed and tested on Python 3.9.6
 
 from __future__ import annotations
 from collections import defaultdict
@@ -59,6 +78,8 @@ class Simulation:
     es = EventStack()
 
     # ...state for performance metrics
+    num_q1_jobs = 0
+    num_q2_jobs = 0
     total_jobs = 0
     comp_jobs = 0
     total_sojourn_time: float = 0
@@ -69,7 +90,7 @@ class Simulation:
 event_log_file_handle = None
 
 
-def open_event_log_file(sim_id: str):
+def Event_Log_Open(sim_id: str) -> str:
     global event_log_file_handle
 
     file_name = f"event-log-{sim_id}.csv"
@@ -80,33 +101,33 @@ def open_event_log_file(sim_id: str):
     return file_name
 
 
-def log_event(job_id: job_id_t, event: EventType, time: float):
+def Event_Log_Record(job_id: job_id_t, event: EventType, time: float) -> None:
     global event_log_file_handle
 
     assert event_log_file_handle != None
     event_log_file_handle.write(f"{job_id}, {event.name}, {time}\n")
 
 
-def close_event_log_file():
+def Event_Log_Close():
     global event_log_file_handle
 
     assert event_log_file_handle != None
     event_log_file_handle.close()
 
 
-def exponential_random(mean: float) -> float:
+def Exponential_Random(mean: float) -> float:
     U = random.random()
     return -math.log(1 - U) * mean
 
 
-def ES_Is_Empty(es: EventStack):
+def Event_Stack_Is_Empty(es: EventStack):
     return es.head == None
 
 
-def ES_Insert(es: EventStack, event: Event):
+def Event_Stack_Insert(es: EventStack, event: Event):
     node = EventStackNode(event)
 
-    if ES_Is_Empty(es):
+    if Event_Stack_Is_Empty(es):
         es.head = node
         es.tail = node
         return
@@ -139,13 +160,13 @@ def ES_Insert(es: EventStack, event: Event):
     node.next = curr
     node.prev = curr.prev
 
-    if curr.prev:
-        curr.prev.next = node
+    assert curr.prev != None
+    curr.prev.next = node
     curr.prev = node
 
 
-def ES_Pop(es: EventStack):
-    assert es.head != None
+def Event_Stack_Pop(es: EventStack):
+    assert es.head != None, "Caller tried popping from empty event stack"
     event = es.head.event
     es.head = es.head.next
 
@@ -162,33 +183,37 @@ def Arrival(s: Simulation):
     job_id = job_id_t(s.total_jobs)
     s.arrival_times[job_id] = s.clock
 
-    log_event(job_id, EventType.ARRIVAL, s.clock)
+    Event_Log_Record(job_id, EventType.ARRIVAL, s.clock)
 
+    s.num_q1_jobs += 1
     if s.server_1_busy:
         s.q1.append(job_id)
     else:
         Start_Service_1(s, job_id)
 
-    inter_arrival_time = exponential_random(1 / s.ARRIVAL_RATE)
-    next_arrival_event = Event(s.clock + inter_arrival_time, EventType.ARRIVAL, job_id)
-    ES_Insert(s.es, next_arrival_event)
+    inter_arrival_time = Exponential_Random(1 / s.ARRIVAL_RATE)
+    next_arrival_event = Event(
+        s.clock + inter_arrival_time, EventType.ARRIVAL, job_id)
+    Event_Stack_Insert(s.es, next_arrival_event)
 
 
 def Start_Service_1(s: Simulation, job_id: job_id_t):
-    log_event(job_id, EventType.START_SERVICE_1, s.clock)
+    Event_Log_Record(job_id, EventType.START_SERVICE_1, s.clock)
 
     s.server_1_busy = True
 
-    serv_time = exponential_random(1 / s.SERVICE_RATE_1)
+    serv_time = Exponential_Random(1 / s.SERVICE_RATE_1)
     event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_1, job_id)
-    ES_Insert(s.es, event)
+    Event_Stack_Insert(s.es, event)
 
 
 def Complete_Service_1(s: Simulation, job_id: job_id_t):
-    log_event(job_id, EventType.COMPLETE_SERVICE_1, s.clock)
+    Event_Log_Record(job_id, EventType.COMPLETE_SERVICE_1, s.clock)
 
+    s.num_q1_jobs -= 1
     s.server_1_busy = False
 
+    s.num_q2_jobs += 1
     if s.server_2_busy:
         s.q2.append(job_id)
     else:
@@ -200,19 +225,20 @@ def Complete_Service_1(s: Simulation, job_id: job_id_t):
 
 
 def Start_Service_2(s: Simulation, job_id: job_id_t):
-    log_event(job_id, EventType.START_SERVICE_2, s.clock)
+    Event_Log_Record(job_id, EventType.START_SERVICE_2, s.clock)
 
     s.server_2_busy = True
 
-    serv_time = exponential_random(1 / s.SERVICE_RATE_2)
+    serv_time = Exponential_Random(1 / s.SERVICE_RATE_2)
     event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_2, job_id)
-    ES_Insert(s.es, event)
+    Event_Stack_Insert(s.es, event)
 
 
 def Complete_Service_2(s: Simulation, job_id: job_id_t):
-    log_event(job_id, EventType.COMPLETE_SERVICE_2, s.clock)
+    Event_Log_Record(job_id, EventType.COMPLETE_SERVICE_2, s.clock)
     s.server_2_busy = False
 
+    s.num_q2_jobs -= 1
     s.total_sojourn_time += s.clock - s.arrival_times.pop(job_id)
     s.comp_jobs += 1
 
@@ -225,25 +251,20 @@ def Simulation_Run(
     s: Simulation,
 ) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
     """Runs the simulation and returns probability distributions for queue 1, queue 2 and overall system"""
-    q1_len = 0
-    q2_len = 0
-
     q1_freq: defaultdict[int, float] = defaultdict(lambda: 0)
     q2_freq: defaultdict[int, float] = defaultdict(lambda: 0)
     overall_freq: defaultdict[int, float] = defaultdict(lambda: 0)
 
     Arrival(s)
-    while not ES_Is_Empty(s.es) and s.clock < s.DURATION:
-        event = ES_Pop(s.es)
+    while not Event_Stack_Is_Empty(s.es) and s.clock < s.DURATION:
+        event = Event_Stack_Pop(s.es)
 
         elapsed = event.time - s.clock
-        q1_freq[q1_len] += elapsed
-        q2_freq[q2_len] += elapsed
-        overall_freq[q1_len + q2_len] += elapsed
+        q1_freq[s.num_q1_jobs] += elapsed
+        q2_freq[s.num_q2_jobs] += elapsed
+        overall_freq[s.num_q1_jobs + s.num_q2_jobs] += elapsed
 
         s.clock = event.time
-        q1_len = len(s.q1)
-        q2_len = len(s.q2)
 
         if event.type == EventType.ARRIVAL:
             Arrival(s)
@@ -263,38 +284,21 @@ def Simulation_Run(
 
 def Get_Config():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--duration", type=float)
-    parser.add_argument("--arrival-rate", type=float)
-    parser.add_argument("--service-rate-1", type=float)
-    parser.add_argument("--service-rate-2", type=float)
-    parser.add_argument("--rng-seed", type=int)
+    parser.add_argument("--duration", type=float, default=10_000)
+    parser.add_argument("--arrival-rate", type=float, default=1)
+    parser.add_argument("--service-rate-1", type=float, default=3)
+    parser.add_argument("--service-rate-2", type=float, default=5)
+    parser.add_argument("--rng-seed", type=int,
+                        default=random.randrange(sys.maxsize))
 
     args = parser.parse_args()
 
-    if args.duration == None:
-        print("Duration not provided, using default value")
-        args.duration = 10_000
-    if args.arrival_rate == None:
-        print("Arrival rate not provided, using default value")
-        args.arrival_rate = 1
-    if args.service_rate_1 == None:
-        print("Queue 1 service rate not provided, using default value")
-        args.service_rate_1 = 3
-    if args.service_rate_2 == None:
-        print("Queue 2 service rate not provided, using default value")
-        args.service_rate_2 = 4
-    if args.rng_seed == None:
-        print("Seed for RNG not provided, using random seed")
-        args.rng_seed = random.randrange(sys.maxsize)
-
-    print()
-
-    print(f"Duration\t= {args.duration} seconds")
-    print(f"Arrival Rate\t= {args.arrival_rate} jobs/second")
-    print(f"Service Rate 1\t= {args.service_rate_1} jobs/second")
-    print(f"Service Rate 2\t= {args.service_rate_2} jobs/second")
-    print(f"RNG Seed\t= {args.rng_seed}")
-
+    print(f"Print help using `{sys.argv[0]} -h` for customization...")
+    print(f"Duration       = {args.duration}s")
+    print(f"Arrival Rate   = {args.arrival_rate} job/s")
+    print(f"Service Rate 1 = {args.service_rate_1} job/s")
+    print(f"Service Rate 2 = {args.service_rate_2} job/s")
+    print(f"RNG Seed       = {args.rng_seed}")
     print()
 
     return (
@@ -311,7 +315,7 @@ def main():
 
     sim_id = f"{duration}-{arrival_rate}-{service_rate_1}-{service_rate_2}-{rng_seed}"
 
-    event_log_file_name = open_event_log_file(sim_id)
+    event_log_file_name = Event_Log_Open(sim_id)
 
     s = Simulation(
         DURATION=duration,
@@ -324,31 +328,34 @@ def main():
 
     q1_freq, q2_freq, overall_freq = Simulation_Run(s)
 
-    q1_probs = freq_to_prob(q1_freq)
-    q2_probs = freq_to_prob(q2_freq)
-    overall_probs = freq_to_prob(overall_freq)
+    q1_probs = Freq_To_Prob(q1_freq)
+    q2_probs = Freq_To_Prob(q2_freq)
+    overall_probs = Freq_To_Prob(overall_freq)
 
-    verify_jacksons_theorem(q1_probs, q2_probs, overall_probs)
+    Verify_Jacksons_Theorem(sim_id, q1_probs, q2_probs, overall_probs)
 
     print()
 
     avg_sojourn_time = s.total_sojourn_time / s.comp_jobs
-    print(f"Total jobs inbound: {s.total_jobs}")
-    print(f"Total jobs completed: {s.comp_jobs}")
-    print(f"Measured Sojourn Time\t= {avg_sojourn_time} seconds")
+
+    exp_sojourn_time = 1 / (s.SERVICE_RATE_1 - s.ARRIVAL_RATE)
+    exp_sojourn_time += 1 / (s.SERVICE_RATE_2 - s.ARRIVAL_RATE)
+
+    print(f"Total jobs inbound            = {s.total_jobs}")
+    print(f"Total jobs completed          = {s.comp_jobs}")
+    print(f"Measured Sojourn Time         = {avg_sojourn_time:.5f}s")
+    print(f"Expected Sojourn Time         = {exp_sojourn_time:.5f}s")
     print(
-        f"Expected Sojourn Time\t= {1 / (s.SERVICE_RATE_1 - s.ARRIVAL_RATE) + 1 / (s.SERVICE_RATE_2 - s.ARRIVAL_RATE)}"
-    )
-    print(f"Avg number of jobs (measured) = {expected_value(overall_probs)}")
+        f"Avg number of jobs (measured) = {Expected_Value(overall_probs):.5f}")
 
     print()
 
     print(f"Refer {event_log_file_name} for event log")
 
-    close_event_log_file()
+    Event_Log_Close()
 
 
-def freq_to_prob(freq_dist: dict[int, float]) -> dict[int, float]:
+def Freq_To_Prob(freq_dist: dict[int, float]) -> dict[int, float]:
     """Takes dictionary that stores frequency distribution and returns
     dictionary that stores probability distribution"""
     prob_dist: dict[int, float] = {}
@@ -362,14 +369,15 @@ def freq_to_prob(freq_dist: dict[int, float]) -> dict[int, float]:
     return prob_dist
 
 
-def expected_value(prob_dist: dict[int, float]) -> float:
+def Expected_Value(prob_dist: dict[int, float]) -> float:
     exp_val = 0
     for var, prob in prob_dist.items():
         exp_val += var * prob
     return exp_val
 
 
-def verify_jacksons_theorem(
+def Verify_Jacksons_Theorem(
+    sim_id: str,
     q1_probs: dict[int, float],
     q2_probs: dict[int, float],
     measu_overall_probs: dict[int, float],
@@ -382,28 +390,35 @@ def verify_jacksons_theorem(
             q2_len = overall_len - i
 
             if q1_len in q1_probs and q2_len in q2_probs:
-                calcu_overall_probs[overall_len] += q1_probs[q1_len] * q2_probs[q2_len]
-
-    print(
-        "Size",
-        "Queue 1",
-        "Queue 2",
-        "Overall",
-        "Overall (calculated)",
-        sep="\t",
-    )
+                prob = q1_probs[q1_len] * q2_probs[q2_len]
+                calcu_overall_probs[overall_len] += prob
 
     most_len = max(
-        len(q1_probs), len(q2_probs), len(measu_overall_probs), len(calcu_overall_probs)
+        len(q1_probs), len(q2_probs), len(
+            measu_overall_probs), len(calcu_overall_probs)
     )
+
+    format_string = "| {:<4} | {:<8} | {:<8} | {:<15} | {:<17} |"
+
+    print(
+        format_string.format(
+            "Size",
+            "Queue 1",
+            "Queue 2",
+            "System Measured",
+            "System Calculated",
+        )
+    )
+
     for i in range(most_len + 1):
         print(
-            i,
-            "{:.5f}".format(q1_probs.get(i, 0)),
-            "{:.5f}".format(q2_probs.get(i, 0)),
-            "{:.5f}".format(measu_overall_probs.get(i, 0)),
-            "{:.5f}".format(calcu_overall_probs.get(i, 0)),
-            sep="\t",
+            format_string.format(
+                i,
+                "{:.5f}".format(q1_probs.get(i, 0)),
+                "{:.5f}".format(q2_probs.get(i, 0)),
+                "{:.5f}".format(measu_overall_probs.get(i, 0)),
+                "{:.5f}".format(calcu_overall_probs.get(i, 0)),
+            )
         )
 
 
