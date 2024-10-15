@@ -262,7 +262,6 @@ def Simulation_Run(
         if s.server_2_busy:
             n2 += 1
 
-
         q1_freq[n1] += elapsed
         q2_freq[n2] += elapsed
         overall_freq[n1 + n2] += elapsed
@@ -362,7 +361,6 @@ def main():
     print()
     print(f"Average number of jobs (measured) = {avg_num_jobs:.5f}")
     print(f"Average number of jobs (expected) = {exp_avg_num_jobs:.5f}")
-
     print()
 
     print(f"Refer {event_log_file_name} for event log")
@@ -427,7 +425,6 @@ def Verify_Jacksons_Theorem(
 
     format_string = "| {:<4} | {:<8} | {:<8} | {:<8} |"
 
-
     print(
         format_string.format(
             "Size",
@@ -450,7 +447,6 @@ def Verify_Jacksons_Theorem(
             )
         )
 
-
     print("|                                       |")
     print("|  Distribution from Jackson's Theorem  |")
     print("|                                       |")
@@ -465,6 +461,7 @@ def Verify_Jacksons_Theorem(
             )
         )
     print("|_______________________________________|")
+
 
 if __name__ == "__main__":
     main()
