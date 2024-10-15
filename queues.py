@@ -78,8 +78,6 @@ class Simulation:
     es = EventStack()
 
     # ...state for performance metrics
-    num_q1_jobs = 0
-    num_q2_jobs = 0
     total_jobs = 0
     comp_jobs = 0
     total_sojourn_time: float = 0
@@ -185,7 +183,6 @@ def Arrival(s: Simulation):
 
     Event_Log_Record(job_id, EventType.ARRIVAL, s.clock)
 
-    s.num_q1_jobs += 1
     if s.server_1_busy:
         s.q1.append(job_id)
     else:
@@ -210,10 +207,8 @@ def Start_Service_1(s: Simulation, job_id: job_id_t):
 def Complete_Service_1(s: Simulation, job_id: job_id_t):
     Event_Log_Record(job_id, EventType.COMPLETE_SERVICE_1, s.clock)
 
-    s.num_q1_jobs -= 1
     s.server_1_busy = False
 
-    s.num_q2_jobs += 1
     if s.server_2_busy:
         s.q2.append(job_id)
     else:
@@ -238,7 +233,6 @@ def Complete_Service_2(s: Simulation, job_id: job_id_t):
     Event_Log_Record(job_id, EventType.COMPLETE_SERVICE_2, s.clock)
     s.server_2_busy = False
 
-    s.num_q2_jobs -= 1
     s.total_sojourn_time += s.clock - s.arrival_times.pop(job_id)
     s.comp_jobs += 1
 
@@ -250,7 +244,6 @@ def Complete_Service_2(s: Simulation, job_id: job_id_t):
 def Simulation_Run(
     s: Simulation,
 ) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
-    """Runs the simulation and returns probability distributions for queue 1, queue 2 and overall system"""
     q1_freq: defaultdict[int, float] = defaultdict(lambda: 0)
     q2_freq: defaultdict[int, float] = defaultdict(lambda: 0)
     overall_freq: defaultdict[int, float] = defaultdict(lambda: 0)
@@ -260,9 +253,19 @@ def Simulation_Run(
         event = Event_Stack_Pop(s.es)
 
         elapsed = event.time - s.clock
-        q1_freq[s.num_q1_jobs] += elapsed
-        q2_freq[s.num_q2_jobs] += elapsed
-        overall_freq[s.num_q1_jobs + s.num_q2_jobs] += elapsed
+
+        n1 = len(s.q1)
+        if s.server_1_busy:
+            n1 += 1
+
+        n2 = len(s.q2)
+        if s.server_2_busy:
+            n2 += 1
+
+
+        q1_freq[n1] += elapsed
+        q2_freq[n2] += elapsed
+        overall_freq[n1 + n2] += elapsed
 
         s.clock = event.time
 
@@ -293,7 +296,7 @@ def Get_Config():
 
     args = parser.parse_args()
 
-    print(f"Print help using `{sys.argv[0]} -h` for customization...")
+    print(f"Print help using `{sys.argv[0]} -h` to modify these values...")
     print(f"Duration       = {args.duration}s")
     print(f"Arrival Rate   = {args.arrival_rate} job/s")
     print(f"Service Rate 1 = {args.service_rate_1} job/s")
@@ -330,23 +333,35 @@ def main():
 
     q1_probs = Freq_To_Prob(q1_freq)
     q2_probs = Freq_To_Prob(q2_freq)
-    overall_probs = Freq_To_Prob(overall_freq)
+    sys_probs = Freq_To_Prob(overall_freq)
 
-    Verify_Jacksons_Theorem(sim_id, q1_probs, q2_probs, overall_probs)
+    Verify_Jacksons_Theorem(sim_id,
+                            q1_probs,
+                            q2_probs,
+                            sys_probs,
+
+                            arrival_rate,
+                            service_rate_1,
+                            service_rate_2,
+                            )
 
     print()
 
     avg_sojourn_time = s.total_sojourn_time / s.comp_jobs
+    exp_avg_sojourn_time = 1 / (s.SERVICE_RATE_1 - s.ARRIVAL_RATE)
+    exp_avg_sojourn_time += 1 / (s.SERVICE_RATE_2 - s.ARRIVAL_RATE)
 
-    exp_sojourn_time = 1 / (s.SERVICE_RATE_1 - s.ARRIVAL_RATE)
-    exp_sojourn_time += 1 / (s.SERVICE_RATE_2 - s.ARRIVAL_RATE)
+    avg_num_jobs = Expected_Value(sys_probs)
+    exp_avg_num_jobs = s.ARRIVAL_RATE * exp_avg_sojourn_time
 
-    print(f"Total jobs inbound            = {s.total_jobs}")
-    print(f"Total jobs completed          = {s.comp_jobs}")
-    print(f"Measured Sojourn Time         = {avg_sojourn_time:.5f}s")
-    print(f"Expected Sojourn Time         = {exp_sojourn_time:.5f}s")
-    print(
-        f"Avg number of jobs (measured) = {Expected_Value(overall_probs):.5f}")
+    print(f"Total jobs inbound   = {s.total_jobs}")
+    print(f"Total jobs completed = {s.comp_jobs}")
+    print()
+    print(f"Sojourn Time (measured) = {avg_sojourn_time:.5f}s")
+    print(f"Sojourn Time (expected) = {exp_avg_sojourn_time:.5f}s")
+    print()
+    print(f"Average number of jobs (measured) = {avg_num_jobs:.5f}")
+    print(f"Average number of jobs (expected) = {exp_avg_num_jobs:.5f}")
 
     print()
 
@@ -356,8 +371,6 @@ def main():
 
 
 def Freq_To_Prob(freq_dist: dict[int, float]) -> dict[int, float]:
-    """Takes dictionary that stores frequency distribution and returns
-    dictionary that stores probability distribution"""
     prob_dist: dict[int, float] = {}
     total_freq = 0
     for freq in freq_dist.values():
@@ -380,47 +393,78 @@ def Verify_Jacksons_Theorem(
     sim_id: str,
     q1_probs: dict[int, float],
     q2_probs: dict[int, float],
-    measu_overall_probs: dict[int, float],
+    sys_probs: dict[int, float],
+
+    arrival_rate: float,
+    service_rate_1: float,
+    service_rate_2: float,
 ):
-    calcu_overall_probs: dict[int, float] = {}
-    for overall_len in measu_overall_probs.keys():
-        calcu_overall_probs[overall_len] = 0
-        for i in range(0, overall_len + 1):
+
+    q1_cal_probs: dict[int, float] = {}
+    rho1 = arrival_rate / service_rate_1
+    q1_cal_probs[0] = 1 - rho1
+    for k in range(1, len(q1_probs)):
+        q1_cal_probs[k] = q1_cal_probs[k - 1] * rho1
+
+    q2_cal_probs: dict[int, float] = {}
+    rho2 = arrival_rate / service_rate_2
+    q2_cal_probs[0] = 1 - rho2
+    for k in range(1, len(q2_probs)):
+        q2_cal_probs[k] = q2_cal_probs[k - 1] * rho2
+
+    sys_cal_probs: dict[int, float] = {}
+    for sys_len in sys_probs.keys():
+        sys_cal_probs[sys_len] = 0
+        for i in range(0, sys_len + 1):
             q1_len = i
-            q2_len = overall_len - i
+            q2_len = sys_len - i
 
-            if q1_len in q1_probs and q2_len in q2_probs:
-                prob = q1_probs[q1_len] * q2_probs[q2_len]
-                calcu_overall_probs[overall_len] += prob
+            if q1_len in q1_cal_probs and q2_len in q2_cal_probs:
+                prob = q1_cal_probs[q1_len] * q2_cal_probs[q2_len]
+                sys_cal_probs[sys_len] += prob
 
-    most_len = max(
-        len(q1_probs), len(q2_probs), len(
-            measu_overall_probs), len(calcu_overall_probs)
-    )
+    most_len = max(len(q1_probs), len(q2_probs), len(sys_probs)) + 1
 
-    format_string = "| {:<4} | {:<8} | {:<8} | {:<15} | {:<17} |"
+    format_string = "| {:<4} | {:<8} | {:<8} | {:<8} |"
+
 
     print(
         format_string.format(
             "Size",
             "Queue 1",
             "Queue 2",
-            "System Measured",
-            "System Calculated",
+            "System",
         )
     )
 
-    for i in range(most_len + 1):
+    print("|                                       |")
+    print("|      Distribution from Simulation     |")
+    print("|                                       |")
+    for i in range(most_len):
         print(
             format_string.format(
                 i,
                 "{:.5f}".format(q1_probs.get(i, 0)),
                 "{:.5f}".format(q2_probs.get(i, 0)),
-                "{:.5f}".format(measu_overall_probs.get(i, 0)),
-                "{:.5f}".format(calcu_overall_probs.get(i, 0)),
+                "{:.5f}".format(sys_probs.get(i, 0)),
             )
         )
 
+
+    print("|                                       |")
+    print("|  Distribution from Jackson's Theorem  |")
+    print("|                                       |")
+
+    for i in range(most_len):
+        print(
+            format_string.format(
+                i,
+                "{:.5f}".format(q1_cal_probs.get(i, 0)),
+                "{:.5f}".format(q2_cal_probs.get(i, 0)),
+                "{:.5f}".format(sys_cal_probs.get(i, 0)),
+            )
+        )
+    print("|_______________________________________|")
 
 if __name__ == "__main__":
     main()
