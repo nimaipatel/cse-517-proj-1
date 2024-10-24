@@ -17,6 +17,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # pyright: strict
+# workaround for unknown matplotlib types:
+# pyright: reportUnknownMemberType=false
+# pyright: reportMissingImports=false
 
 # This program has been developed and tested on Python 3.9.6
 
@@ -80,7 +83,7 @@ class Simulation:
     # ...state for performance metrics
     total_jobs = 0
     comp_jobs = 0
-    total_sojourn_time: float = 0
+    sojourn_times: List[float] = field(default_factory=list)
     arrival_times: dict[job_id_t, float] = field(default_factory=dict)
 
 
@@ -102,8 +105,8 @@ def Event_Log_Open(sim_id: str) -> str:
 def Event_Log_Record(job_id: job_id_t, event: EventType, time: float) -> None:
     global event_log_file_handle
 
-    assert event_log_file_handle != None
-    event_log_file_handle.write(f"{job_id}, {event.name}, {time}\n")
+    if event_log_file_handle:
+        event_log_file_handle.write(f"{job_id}, {event.name}, {time}\n")
 
 
 def Event_Log_Close():
@@ -233,7 +236,7 @@ def Complete_Service_2(s: Simulation, job_id: job_id_t):
     Event_Log_Record(job_id, EventType.COMPLETE_SERVICE_2, s.clock)
     s.server_2_busy = False
 
-    s.total_sojourn_time += s.clock - s.arrival_times.pop(job_id)
+    s.sojourn_times.append(s.clock - s.arrival_times[job_id])
     s.comp_jobs += 1
 
     if len(s.q2) > 0:
@@ -287,9 +290,9 @@ def Simulation_Run(
 def Get_Config():
     parser = argparse.ArgumentParser()
     parser.add_argument("--duration", type=float, default=10_000)
-    parser.add_argument("--arrival-rate", type=float, default=1)
+    parser.add_argument("--arrival-rate", type=float, default=2)
     parser.add_argument("--service-rate-1", type=float, default=3)
-    parser.add_argument("--service-rate-2", type=float, default=5)
+    parser.add_argument("--service-rate-2", type=float, default=4)
     parser.add_argument("--rng-seed", type=int,
                         default=random.randrange(sys.maxsize))
 
@@ -346,26 +349,53 @@ def main():
 
     print()
 
-    avg_sojourn_time = s.total_sojourn_time / s.comp_jobs
-    exp_avg_sojourn_time = 1 / (s.SERVICE_RATE_1 - s.ARRIVAL_RATE)
-    exp_avg_sojourn_time += 1 / (s.SERVICE_RATE_2 - s.ARRIVAL_RATE)
+    avg_sojourn_time, sd_sojourn_time, _ = Expected_Value_List(s.sojourn_times)
+    avg_sojourn_time_exp = 1 / (s.SERVICE_RATE_1 - s.ARRIVAL_RATE)
+    avg_sojourn_time_exp += 1 / (s.SERVICE_RATE_2 - s.ARRIVAL_RATE)
 
-    avg_num_jobs = Expected_Value(sys_probs)
-    exp_avg_num_jobs = s.ARRIVAL_RATE * exp_avg_sojourn_time
+    avg_num_jobs, sd_num_jobs, _ = Expected_Value_Dist(overall_freq)
+    avg_num_jobs_exp = s.ARRIVAL_RATE * avg_sojourn_time_exp
 
     print(f"Total jobs inbound   = {s.total_jobs}")
     print(f"Total jobs completed = {s.comp_jobs}")
     print()
-    print(f"Sojourn Time (measured) = {avg_sojourn_time:.5f}s")
-    print(f"Sojourn Time (expected) = {exp_avg_sojourn_time:.5f}s")
+    print(f"Average Sojourn Time (measured) = {avg_sojourn_time:.5f}s")
+    print(f"             Standard Deviation = {sd_sojourn_time:.5f}s")
+    print(f"Average Sojourn Time (expected) = {avg_sojourn_time_exp:.5f}s")
     print()
-    print(f"Average number of jobs (measured) = {avg_num_jobs:.5f}")
-    print(f"Average number of jobs (expected) = {exp_avg_num_jobs:.5f}")
+    print(f"Average number of jobs in system (measured) = {avg_num_jobs:.5f}")
+    print(f"                         Standard Deviation = {sd_num_jobs:.5f}")
+    print(
+        f"Average number of jobs in system (expected) = {avg_num_jobs_exp:.5f}")
     print()
 
     print(f"Refer {event_log_file_name} for event log")
 
     Event_Log_Close()
+
+
+def plot_means_with_error_bars(means: List[float], margins_of_error: List[float], labels: List[str], title: str):
+    import matplotlib.pyplot as plt
+
+    # Number of means
+    x = range(len(means))  # the label locations
+
+    # Create bars and error bars
+    plt.bar(x, means, yerr=margins_of_error, capsize=5, alpha=0.0)
+
+    plt.plot(x, means, 'o', color='black', label='Mean Dots')
+
+    # Add labels, title, and custom x-axis tick labels
+    plt.xlabel('Simulations')
+    plt.ylabel('Mean')
+    plt.title(title)
+    plt.xticks(x, labels)
+    plt.axhline(0, color='grey', linewidth=0.8)
+    plt.legend()
+
+    # Show the plot
+    plt.tight_layout()
+    plt.show()
 
 
 def Freq_To_Prob(freq_dist: dict[int, float]) -> dict[int, float]:
@@ -380,11 +410,37 @@ def Freq_To_Prob(freq_dist: dict[int, float]) -> dict[int, float]:
     return prob_dist
 
 
-def Expected_Value(prob_dist: dict[int, float]) -> float:
-    exp_val = 0
-    for var, prob in prob_dist.items():
-        exp_val += var * prob
-    return exp_val
+def Expected_Value_List(l: list[float]) -> tuple[float, float, float]:
+    mean = sum(l) / len(l)
+
+    variance: float = sum((x - mean) ** 2 for x in l)
+    variance /= len(l)
+
+    sd = variance ** 0.5
+
+    zstar = 1.96  # large distribution
+
+    moe = zstar * sd / (len(l) ** 0.5)
+
+    return mean, sd, moe
+
+
+def Expected_Value_Dist(dist: dict[int, float]) -> tuple[float, float, float]:
+    total_freq = sum(dist.values())
+
+    mean = sum(x * freq for x, freq in dist.items())
+    mean /= total_freq
+
+    variance = sum(freq * (x - mean) ** 2 for x, freq in dist.items())
+    variance /= total_freq
+
+    sd = variance ** 0.5
+
+    zstar = 1.96  # large distribution
+
+    moe = zstar * sd / (total_freq ** 0.5)
+
+    return mean, sd, moe
 
 
 def Verify_Jacksons_Theorem(
@@ -463,5 +519,88 @@ def Verify_Jacksons_Theorem(
     print("|_______________________________________|")
 
 
+def varying_arrival():
+    random.seed(0)
+    sojourn_times_means: List[float] = []
+    sojourn_times_moes: List[float] = []
+
+    num_jobs_means: List[float] = []
+    num_jobs_moes: List[float] = []
+
+    labels: List[str] = []
+
+    mu1 = 4
+    mu2 = 5
+    for lam in range(1, 4):
+
+        s = Simulation(
+            DURATION=100,
+            ARRIVAL_RATE=lam,
+            SERVICE_RATE_1=mu1,
+            SERVICE_RATE_2=mu2,
+        )
+
+        _, _, sys_freq = Simulation_Run(s)
+        avg_sojourn_time, _, moe_sojourn_time = Expected_Value_List(
+            s.sojourn_times)
+        avg_num_jobs, _, moe_num_jobs = Expected_Value_Dist(sys_freq)
+
+        sojourn_times_means.append(avg_sojourn_time)
+        sojourn_times_moes.append(moe_sojourn_time)
+
+        num_jobs_means.append(avg_num_jobs)
+        num_jobs_moes.append(moe_num_jobs)
+
+        labels.append(f"λ={lam}")
+
+    title = f"Service Rate 1 = {mu1}, Service Rate 2 = {mu2}, Varying Arrival Rate"
+    plot_means_with_error_bars(sojourn_times_means, sojourn_times_moes,
+                               labels, title)
+    plot_means_with_error_bars(num_jobs_means, num_jobs_moes,
+                               labels, title)
+
+def varying_service():
+    random.seed(0)
+    sojourn_times_means: List[float] = []
+    sojourn_times_moes: List[float] = []
+
+    num_jobs_means: List[float] = []
+    num_jobs_moes: List[float] = []
+
+    labels: List[str] = []
+
+    lam = 1
+    mu2 = 10
+    for mu1 in range(3, 8):
+
+        s = Simulation(
+            DURATION=100,
+            ARRIVAL_RATE=lam,
+            SERVICE_RATE_1=mu1,
+            SERVICE_RATE_2=mu2,
+        )
+
+        _, _, sys_freq = Simulation_Run(s)
+        avg_sojourn_time, _, moe_sojourn_time = Expected_Value_List(
+            s.sojourn_times)
+        avg_num_jobs, _, moe_num_jobs = Expected_Value_Dist(sys_freq)
+
+        sojourn_times_means.append(avg_sojourn_time)
+        sojourn_times_moes.append(moe_sojourn_time)
+
+        num_jobs_means.append(avg_num_jobs)
+        num_jobs_moes.append(moe_num_jobs)
+
+        labels.append(f"μ1={mu1}")
+
+    title = f"Arrival Rate = {lam}, Service Rate 2 = {mu2}, Varying Service Rate 1"
+    plot_means_with_error_bars(sojourn_times_means, sojourn_times_moes,
+                               labels, title)
+    plot_means_with_error_bars(num_jobs_means, num_jobs_moes,
+                               labels, title)
+
+
 if __name__ == "__main__":
     main()
+    # varying_arrival()
+    # varying_service()
