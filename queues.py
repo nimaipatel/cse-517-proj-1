@@ -224,7 +224,6 @@ def Complete_Service_1(s: Simulation, job_id: job_id_t):
 
 def Start_Service_2(s: Simulation, job_id: job_id_t):
     Event_Log_Record(job_id, EventType.START_SERVICE_2, s.clock)
-
     s.server_2_busy = True
 
     serv_time = Exponential_Random(1 / s.SERVICE_RATE_2)
@@ -237,6 +236,7 @@ def Complete_Service_2(s: Simulation, job_id: job_id_t):
     s.server_2_busy = False
 
     s.sojourn_times.append(s.clock - s.arrival_times[job_id])
+
     s.comp_jobs += 1
 
     if len(s.q2) > 0:
@@ -249,11 +249,12 @@ def Simulation_Run(
 ) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
     q1_freq: defaultdict[int, float] = defaultdict(lambda: 0)
     q2_freq: defaultdict[int, float] = defaultdict(lambda: 0)
-    overall_freq: defaultdict[int, float] = defaultdict(lambda: 0)
+    sys_freq: defaultdict[int, float] = defaultdict(lambda: 0)
 
     Arrival(s)
-    while not Event_Stack_Is_Empty(s.es) and s.clock < s.DURATION:
-        event = Event_Stack_Pop(s.es)
+    while ((not Event_Stack_Is_Empty(s.es)) and
+           (event := Event_Stack_Pop(s.es)) and
+           (event.time < s.DURATION)):
 
         elapsed = event.time - s.clock
 
@@ -267,7 +268,7 @@ def Simulation_Run(
 
         q1_freq[n1] += elapsed
         q2_freq[n2] += elapsed
-        overall_freq[n1 + n2] += elapsed
+        sys_freq[n1 + n2] += elapsed
 
         s.clock = event.time
 
@@ -282,9 +283,9 @@ def Simulation_Run(
 
     assert max(q1_freq.keys()) == len(q1_freq.keys()) - 1
     assert max(q2_freq.keys()) == len(q2_freq.keys()) - 1
-    assert max(overall_freq.keys()) == len(overall_freq.keys()) - 1
+    assert max(sys_freq.keys()) == len(sys_freq.keys()) - 1
 
-    return q1_freq, q2_freq, overall_freq
+    return q1_freq, q2_freq, sys_freq
 
 
 def Get_Config():
@@ -331,11 +332,11 @@ def main():
 
     random.seed(rng_seed)
 
-    q1_freq, q2_freq, overall_freq = Simulation_Run(s)
+    q1_freq, q2_freq, sys_freq = Simulation_Run(s)
 
     q1_probs = Freq_To_Prob(q1_freq)
     q2_probs = Freq_To_Prob(q2_freq)
-    sys_probs = Freq_To_Prob(overall_freq)
+    sys_probs = Freq_To_Prob(sys_freq)
 
     Verify_Jacksons_Theorem(sim_id,
                             q1_probs,
@@ -353,7 +354,7 @@ def main():
     avg_sojourn_time_exp = 1 / (s.SERVICE_RATE_1 - s.ARRIVAL_RATE)
     avg_sojourn_time_exp += 1 / (s.SERVICE_RATE_2 - s.ARRIVAL_RATE)
 
-    avg_num_jobs, sd_num_jobs, _ = Expected_Value_Dist(overall_freq)
+    avg_num_jobs, sd_num_jobs, _ = Expected_Value_Dist(sys_freq)
     avg_num_jobs_exp = s.ARRIVAL_RATE * avg_sojourn_time_exp
 
     print(f"Total jobs inbound   = {s.total_jobs}")
@@ -372,30 +373,6 @@ def main():
     print(f"Refer {event_log_file_name} for event log")
 
     Event_Log_Close()
-
-
-def plot_means_with_error_bars(means: List[float], margins_of_error: List[float], labels: List[str], title: str):
-    import matplotlib.pyplot as plt
-
-    # Number of means
-    x = range(len(means))  # the label locations
-
-    # Create bars and error bars
-    plt.bar(x, means, yerr=margins_of_error, capsize=5, alpha=0.0)
-
-    plt.plot(x, means, 'o', color='black', label='Mean Dots')
-
-    # Add labels, title, and custom x-axis tick labels
-    plt.xlabel('Simulations')
-    plt.ylabel('Mean')
-    plt.title(title)
-    plt.xticks(x, labels)
-    plt.axhline(0, color='grey', linewidth=0.8)
-    plt.legend()
-
-    # Show the plot
-    plt.tight_layout()
-    plt.show()
 
 
 def Freq_To_Prob(freq_dist: dict[int, float]) -> dict[int, float]:
@@ -519,8 +496,26 @@ def Verify_Jacksons_Theorem(
     print("|_______________________________________|")
 
 
-def varying_arrival():
-    random.seed(0)
+def Plot_Stats(plt, means: List[float], margins_of_error: List[float], labels: List[str], title: str, metric: str, xlabel: str):  # type: ignore
+    x = range(len(means))
+
+    plt.bar(x, means, yerr=margins_of_error, capsize=5, alpha=0.0)
+
+    plt.plot(x, means, 'o', color='black', label='Mean')
+
+    plt.set_xlabel(xlabel)
+    plt.set_ylabel(f'{metric}')
+    plt.set_title(title)
+    plt.set_xticks(x, labels)
+    plt.axhline(0, color='grey', linewidth=0.8)
+    plt.legend()
+
+
+def Plot_Varying():
+    import matplotlib.pyplot as plt
+
+    _, axes = plt.subplots(2, 3, figsize=(12, 6))  # type: ignore
+
     sojourn_times_means: List[float] = []
     sojourn_times_moes: List[float] = []
 
@@ -529,9 +524,9 @@ def varying_arrival():
 
     labels: List[str] = []
 
-    mu1 = 4
-    mu2 = 5
-    for lam in range(1, 4):
+    mu1 = 10
+    mu2 = 11
+    for lam in range(1, 10):
 
         s = Simulation(
             DURATION=100,
@@ -551,16 +546,15 @@ def varying_arrival():
         num_jobs_means.append(avg_num_jobs)
         num_jobs_moes.append(moe_num_jobs)
 
-        labels.append(f"λ={lam}")
+        labels.append(f"{lam}")
 
     title = f"Service Rate 1 = {mu1}, Service Rate 2 = {mu2}, Varying Arrival Rate"
-    plot_means_with_error_bars(sojourn_times_means, sojourn_times_moes,
-                               labels, title)
-    plot_means_with_error_bars(num_jobs_means, num_jobs_moes,
-                               labels, title)
+    Plot_Stats(axes[0, 0], #type: ignore
+               sojourn_times_means, sojourn_times_moes,
+               labels, title, "sojourn time (s)", "Arrival Rate")
+    Plot_Stats(axes[1, 0],  # type: ignore
+               num_jobs_means, num_jobs_moes, labels, title, "number of jobs", "Arrival Rate")
 
-def varying_service():
-    random.seed(0)
     sojourn_times_means: List[float] = []
     sojourn_times_moes: List[float] = []
 
@@ -570,8 +564,8 @@ def varying_service():
     labels: List[str] = []
 
     lam = 1
-    mu2 = 10
-    for mu1 in range(3, 8):
+    mu2 = 3
+    for mu1 in range(2, 10):
 
         s = Simulation(
             DURATION=100,
@@ -581,6 +575,7 @@ def varying_service():
         )
 
         _, _, sys_freq = Simulation_Run(s)
+
         avg_sojourn_time, _, moe_sojourn_time = Expected_Value_List(
             s.sojourn_times)
         avg_num_jobs, _, moe_num_jobs = Expected_Value_Dist(sys_freq)
@@ -591,16 +586,58 @@ def varying_service():
         num_jobs_means.append(avg_num_jobs)
         num_jobs_moes.append(moe_num_jobs)
 
-        labels.append(f"μ1={mu1}")
+        labels.append(f"{mu1}")
 
     title = f"Arrival Rate = {lam}, Service Rate 2 = {mu2}, Varying Service Rate 1"
-    plot_means_with_error_bars(sojourn_times_means, sojourn_times_moes,
-                               labels, title)
-    plot_means_with_error_bars(num_jobs_means, num_jobs_moes,
-                               labels, title)
+    Plot_Stats(axes[0, 1], #type: ignore
+               sojourn_times_means, sojourn_times_moes, labels, title, "sojourn time (s)", "Service Rate 1")
+    Plot_Stats(axes[1, 1], #type: ignore
+               num_jobs_means, num_jobs_moes, labels, title, "number of jobs", "Service Rate 1")
+
+    sojourn_times_means: List[float] = []
+    sojourn_times_moes: List[float] = []
+
+    num_jobs_means: List[float] = []
+    num_jobs_moes: List[float] = []
+
+    labels: List[str] = []
+
+    lam = 1
+    mu1 = 10
+    for mu2 in range(5, 20):
+
+        s = Simulation(
+            DURATION=100,
+            ARRIVAL_RATE=lam,
+            SERVICE_RATE_1=mu1,
+            SERVICE_RATE_2=mu2,
+        )
+
+        _, _, sys_freq = Simulation_Run(s)
+
+        avg_sojourn_time, _, moe_sojourn_time = Expected_Value_List(
+            s.sojourn_times)
+        avg_num_jobs, _, moe_num_jobs = Expected_Value_Dist(sys_freq)
+
+        sojourn_times_means.append(avg_sojourn_time)
+        sojourn_times_moes.append(moe_sojourn_time)
+
+        num_jobs_means.append(avg_num_jobs)
+        num_jobs_moes.append(moe_num_jobs)
+
+        labels.append(f"{mu1}")
+
+    title = f"Arrival Rate = {lam}, Service Rate 1 = {mu1}, Varying Service Rate 2"
+
+    Plot_Stats(axes[0, 2], # type: ignore
+               sojourn_times_means, sojourn_times_moes, labels, title, "sojourn time (s)", "Service Rate 2")
+    Plot_Stats(axes[1, 2], # type: ignore
+               num_jobs_means, num_jobs_moes, labels, title, "number of jobs", "Service Rate 2")
+
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == "__main__":
-    main()
-    # varying_arrival()
-    # varying_service()
+    # main()
+    Plot_Varying()
