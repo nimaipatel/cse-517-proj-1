@@ -12,16 +12,24 @@ from typing import List
 from queues import Simulation, Simulation_Run, Expected_Value_List, Expected_Value_Dist
 
 
-def Plot_Stats(plt, means: List[float], margins_of_error: List[float], labels: List[str], title: str, metric: str, xlabel: str):  # type: ignore
-    assert (len(means) == len(margins_of_error))
+def Plot_Stats(plt, means: List[float], margins_of_error: List[float], labels: List[str], title: str, metric: str, xlabel: str):
+    assert len(means) == len(margins_of_error)
     x = range(len(means))
 
     plt.bar(x, means, yerr=margins_of_error, capsize=5, alpha=0.0)
 
-    plt.plot(x, means, 'o', color='black', label='Mean')
+    plt.plot(x, means, 'o', color='blue', label='Mean')
+
+    for i, (mean, margin) in enumerate(zip(means, margins_of_error)):
+        plt.text(i, mean, f'{mean:.5f}', ha='center',
+                 va='bottom', color='blue')
+        plt.text(i, mean + margin, f'+{margin:.5f}',
+                 ha='center', va='bottom', color='red')
+        plt.text(i, mean - margin, f'-{margin:.5f}',
+                 ha='center', va='top', color='red')
 
     plt.set_xlabel(xlabel)
-    plt.set_ylabel(f'{metric}')
+    plt.set_ylabel(metric)
     plt.set_title(title)
     plt.set_xticks(x, labels)
     plt.axhline(0, color='grey', linewidth=0.8)
@@ -29,7 +37,7 @@ def Plot_Stats(plt, means: List[float], margins_of_error: List[float], labels: L
 
 
 def Plot_Varying():
-    _, axes = plt.subplots(1, 2, figsize=(12, 10))  # type: ignore
+    _, axes = plt.subplots(1, 2, figsize=(20, 14))  # type: ignore
 
     sojourn_times_means: List[float] = []
     sojourn_times_moes: List[float] = []
@@ -63,19 +71,19 @@ def Plot_Varying():
 
         labels.append(f"{lam}")
 
-    title = f"Service Rate 1 = {mu1}, Service Rate 2 = {mu2}, Varying Arrival Rate"
+    title = f"Service Rate 1 = {mu1} (jobs/s), Service Rate 2 = {mu2} (jobs/s), Varying Arrival Rate"
     Plot_Stats(axes[0],  # type: ignore
                sojourn_times_means, sojourn_times_moes,
-               labels, title, "sojourn time (s)", "Arrival Rate")
+               labels, title, "sojourn time (s)", "Arrival Rate (jobs/s)")
     Plot_Stats(axes[1],  # type: ignore
-               num_jobs_means, num_jobs_moes, labels, title, "number of jobs", "Arrival Rate")
+               num_jobs_means, num_jobs_moes, labels, title, "number of jobs", "Arrival Rate (jobs/s)")
     plt.tight_layout()
     plt.savefig('varying_arrival.png', format='png')
     print("Generated varying_arrival.png...")
 
 
 def Plot_Varying_Service_1():
-    _, axes = plt.subplots(1, 2, figsize=(12, 10))  # type: ignore
+    _, axes = plt.subplots(1, 2, figsize=(20, 14))  # type: ignore
 
     sojourn_times_means: List[float] = []
     sojourn_times_moes: List[float] = []
@@ -110,11 +118,11 @@ def Plot_Varying_Service_1():
 
         labels.append(f"{mu1}")
 
-    title = f"Arrival Rate = {lam}, Service Rate 2 = {mu2}, Varying Service Rate 1"
+    title = f"Arrival Rate = {lam} (jobs/s), Service Rate 2 = {mu2} (jobs/s), Varying Service Rate 1"
     Plot_Stats(axes[0],  # type: ignore
-               sojourn_times_means, sojourn_times_moes, labels, title, "sojourn time (s)", "Service Rate 1")
+               sojourn_times_means, sojourn_times_moes, labels, title, "sojourn time (s)", "Service Rate 1 (jobs/s)")
     Plot_Stats(axes[1],  # type: ignore
-               num_jobs_means, num_jobs_moes, labels, title, "number of jobs", "Service Rate 1")
+               num_jobs_means, num_jobs_moes, labels, title, "number of jobs", "Service Rate 1 (jobs/s)")
 
     plt.tight_layout()
     plt.savefig('varying_1.png', format='png')
@@ -122,7 +130,7 @@ def Plot_Varying_Service_1():
 
 
 def Plot_Varying_Service_2():
-    _, axes = plt.subplots(1, 2, figsize=(12, 10))  # type: ignore
+    _, axes = plt.subplots(1, 2, figsize=(20, 14))  # type: ignore
 
     sojourn_times_means: List[float] = []
     sojourn_times_moes: List[float] = []
@@ -157,12 +165,12 @@ def Plot_Varying_Service_2():
 
         labels.append(f"{mu2}")
 
-    title = f"Arrival Rate = {lam}, Service Rate 1 = {mu1}, Varying Service Rate 2"
+    title = f"Arrival Rate = {lam} (jobs/s), Service Rate 1 = {mu1} (jobs/s), Varying Service Rate 2"
 
     Plot_Stats(axes[0],  # type: ignore
-               sojourn_times_means, sojourn_times_moes, labels, title, "sojourn time (s)", "Service Rate 2")
+               sojourn_times_means, sojourn_times_moes, labels, title, "sojourn time (s)", "Service Rate 2 (jobs/s)")
     Plot_Stats(axes[1],  # type: ignore
-               num_jobs_means, num_jobs_moes, labels, title, "number of jobs", "Service Rate 2")
+               num_jobs_means, num_jobs_moes, labels, title, "number of jobs", "Service Rate 2 (jobs/s)")
 
     plt.tight_layout()
     plt.savefig('varying_2.png', format='png')
@@ -170,7 +178,7 @@ def Plot_Varying_Service_2():
 
 
 def Plot_Varying_Service_Both():
-    _, axes = plt.subplots(1, 2, figsize=(12, 10))  # type: ignore
+    _, axes = plt.subplots(1, 2, figsize=(20, 14))  # type: ignore
 
     sojourn_times_means: List[float] = []
     sojourn_times_moes: List[float] = []
@@ -209,17 +217,21 @@ def Plot_Varying_Service_Both():
     title = f"Arrival Rate = {lam}, Varying Service Rate 1 and 2"
 
     Plot_Stats(axes[0],  # type: ignore
-               sojourn_times_means, sojourn_times_moes, labels, title, "sojourn time (s)", "Service Rate 1 and 2")
+               sojourn_times_means, sojourn_times_moes, labels, title, "sojourn time (s)", "Service Rate 1 and 2 (jobs/s)")
     Plot_Stats(axes[1],  # type: ignore
-               num_jobs_means, num_jobs_moes, labels, title, "number of jobs", "Service Rate 1 and 2")
+               num_jobs_means, num_jobs_moes, labels, title, "number of jobs", "Service Rate 1 and 2 (jobs/s)")
 
     plt.tight_layout()
     plt.savefig('varying_both.png', format='png')
     print("Generated varying_both.png...")
 
 
-def Plot_Charts():
+def main():
     Plot_Varying()
     Plot_Varying_Service_1()
     Plot_Varying_Service_2()
     Plot_Varying_Service_Both()
+
+
+if __name__ == "__main__":
+    main()
