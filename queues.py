@@ -30,7 +30,7 @@ import sys
 from typing import List, NewType, Optional
 import argparse
 
-job_id_t = NewType("job_id_t", int)
+JobID = NewType("JobID", int)
 
 
 class EventType(Enum):
@@ -45,7 +45,7 @@ class EventType(Enum):
 class Event:
     time: float
     type: EventType
-    job_id: job_id_t
+    job_id: JobID
 
 
 @dataclass
@@ -71,8 +71,8 @@ class Simulation:
 
     # State
     clock: float = 0
-    q1: List[job_id_t] = field(default_factory=list)
-    q2: List[job_id_t] = field(default_factory=list)
+    q1: List[JobID] = field(default_factory=list)
+    q2: List[JobID] = field(default_factory=list)
     server_1_busy = False
     server_2_busy = False
     es = EventStack()
@@ -81,7 +81,7 @@ class Simulation:
     total_jobs = 0
     comp_jobs = 0
     sojourn_times: List[float] = field(default_factory=list)
-    arrival_times: dict[job_id_t, float] = field(default_factory=dict)
+    arrival_times: dict[JobID, float] = field(default_factory=dict)
 
 
 # Misc.
@@ -99,7 +99,7 @@ def Event_Log_Open(sim_id: str) -> str:
     return file_name
 
 
-def Event_Log_Record(job_id: job_id_t, event: EventType, time: float) -> None:
+def Event_Log_Record(job_id: JobID, event: EventType, time: float) -> None:
     global event_log_file_handle
 
     if event_log_file_handle:
@@ -178,7 +178,7 @@ def Event_Stack_Pop(es: EventStack):
 
 def Arrival(s: Simulation):
     s.total_jobs += 1
-    job_id = job_id_t(s.total_jobs)
+    job_id = JobID(s.total_jobs)
     s.arrival_times[job_id] = s.clock
 
     Event_Log_Record(job_id, EventType.ARRIVAL, s.clock)
@@ -194,7 +194,7 @@ def Arrival(s: Simulation):
     Event_Stack_Insert(s.es, next_arrival_event)
 
 
-def Start_Service_1(s: Simulation, job_id: job_id_t):
+def Start_Service_1(s: Simulation, job_id: JobID):
     Event_Log_Record(job_id, EventType.START_SERVICE_1, s.clock)
 
     s.server_1_busy = True
@@ -204,7 +204,7 @@ def Start_Service_1(s: Simulation, job_id: job_id_t):
     Event_Stack_Insert(s.es, event)
 
 
-def Complete_Service_1(s: Simulation, job_id: job_id_t):
+def Complete_Service_1(s: Simulation, job_id: JobID):
     Event_Log_Record(job_id, EventType.COMPLETE_SERVICE_1, s.clock)
 
     s.server_1_busy = False
@@ -219,7 +219,7 @@ def Complete_Service_1(s: Simulation, job_id: job_id_t):
         Start_Service_1(s, next_job_id)
 
 
-def Start_Service_2(s: Simulation, job_id: job_id_t):
+def Start_Service_2(s: Simulation, job_id: JobID):
     Event_Log_Record(job_id, EventType.START_SERVICE_2, s.clock)
     s.server_2_busy = True
 
@@ -228,7 +228,7 @@ def Start_Service_2(s: Simulation, job_id: job_id_t):
     Event_Stack_Insert(s.es, event)
 
 
-def Complete_Service_2(s: Simulation, job_id: job_id_t):
+def Complete_Service_2(s: Simulation, job_id: JobID):
     Event_Log_Record(job_id, EventType.COMPLETE_SERVICE_2, s.clock)
     s.server_2_busy = False
 
