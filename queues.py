@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Copyright (C) 2024 Patel, Nimai <nimai.m.patel@gmail.com>
 # Author: Patel, Nimai <nimai.m.patel@gmail.com>
 #
@@ -27,10 +25,12 @@ import math
 import random
 from enum import Enum, auto
 import sys
-from typing import List, NewType, Optional
+from typing import List, NewType, Optional, Union, Callable
 import argparse
+import ast
 
 JobID = NewType("JobID", int)
+PhaseDist = Union[float, tuple[list[float], list[list[float]]]]
 
 
 class EventType(Enum):
@@ -65,9 +65,12 @@ class EventStack:
 class Simulation:
     # Constants
     DURATION: float
-    ARRIVAL_RATE: float
-    SERVICE_RATE_1: float
-    SERVICE_RATE_2: float
+    ARRIVAL_DIST: Callable[
+        [], float
+    ]  # yeah, function pointers are slow, but guess what? we are using Python
+    SERVICE_1_DIST: Callable[[], float]
+    SERVICE_2_DIST: Callable[[], float]
+    LOG_FILE_NAME: Optional[str]
 
     # State
     clock: float = 0
@@ -84,38 +87,22 @@ class Simulation:
     arrival_times: dict[JobID, float] = field(default_factory=dict)
 
 
-# Misc.
-event_log_file_handle = None
+def Event_Log_Open(s: Simulation):
+    if s.LOG_FILE_NAME is None:
+        return
+
+    with open(s.LOG_FILE_NAME, "w") as f:
+        f.write("Job ID, Event Type, Event Time\n")
 
 
-def Event_Log_Open(sim_id: str) -> str:
-    global event_log_file_handle
+def Event_Log_Record(
+    s: Simulation, job_id: JobID, event: EventType, time: float
+) -> None:
+    if s.LOG_FILE_NAME is None:
+        return
 
-    file_name = f"event-log-{sim_id}.csv"
-    event_log_file_handle = open(file_name, "w")
-    event_log_file_handle.truncate(0)
-    event_log_file_handle.write("Job ID, Event Type, Event Time\n")
-
-    return file_name
-
-
-def Event_Log_Record(job_id: JobID, event: EventType, time: float) -> None:
-    global event_log_file_handle
-
-    if event_log_file_handle:
-        event_log_file_handle.write(f"{job_id}, {event.name}, {time}\n")
-
-
-def Event_Log_Close():
-    global event_log_file_handle
-
-    assert event_log_file_handle != None
-    event_log_file_handle.close()
-
-
-def Exponential_Random(mean: float) -> float:
-    U = random.random()
-    return -math.log(1 - U) * mean
+    with open(s.LOG_FILE_NAME, "a") as f:
+        f.write(f"{job_id}, {event.name}, {time}\n")
 
 
 def Event_Stack_Is_Empty(es: EventStack):
@@ -181,31 +168,30 @@ def Arrival(s: Simulation):
     job_id = JobID(s.total_jobs)
     s.arrival_times[job_id] = s.clock
 
-    Event_Log_Record(job_id, EventType.ARRIVAL, s.clock)
+    Event_Log_Record(s, job_id, EventType.ARRIVAL, s.clock)
 
     if s.server_1_busy:
         s.q1.append(job_id)
     else:
         Start_Service_1(s, job_id)
 
-    inter_arrival_time = Exponential_Random(1 / s.ARRIVAL_RATE)
-    next_arrival_event = Event(
-        s.clock + inter_arrival_time, EventType.ARRIVAL, job_id)
+    inter_arrival_time = s.ARRIVAL_DIST()
+    next_arrival_event = Event(s.clock + inter_arrival_time, EventType.ARRIVAL, job_id)
     Event_Stack_Insert(s.es, next_arrival_event)
 
 
 def Start_Service_1(s: Simulation, job_id: JobID):
-    Event_Log_Record(job_id, EventType.START_SERVICE_1, s.clock)
+    Event_Log_Record(s, job_id, EventType.START_SERVICE_1, s.clock)
 
     s.server_1_busy = True
 
-    serv_time = Exponential_Random(1 / s.SERVICE_RATE_1)
+    serv_time = s.SERVICE_1_DIST()
     event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_1, job_id)
     Event_Stack_Insert(s.es, event)
 
 
 def Complete_Service_1(s: Simulation, job_id: JobID):
-    Event_Log_Record(job_id, EventType.COMPLETE_SERVICE_1, s.clock)
+    Event_Log_Record(s, job_id, EventType.COMPLETE_SERVICE_1, s.clock)
 
     s.server_1_busy = False
 
@@ -220,16 +206,16 @@ def Complete_Service_1(s: Simulation, job_id: JobID):
 
 
 def Start_Service_2(s: Simulation, job_id: JobID):
-    Event_Log_Record(job_id, EventType.START_SERVICE_2, s.clock)
+    Event_Log_Record(s, job_id, EventType.START_SERVICE_2, s.clock)
     s.server_2_busy = True
 
-    serv_time = Exponential_Random(1 / s.SERVICE_RATE_2)
+    serv_time = s.SERVICE_2_DIST()
     event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_2, job_id)
     Event_Stack_Insert(s.es, event)
 
 
 def Complete_Service_2(s: Simulation, job_id: JobID):
-    Event_Log_Record(job_id, EventType.COMPLETE_SERVICE_2, s.clock)
+    Event_Log_Record(s, job_id, EventType.COMPLETE_SERVICE_2, s.clock)
     s.server_2_busy = False
 
     s.sojourn_times.append(s.clock - s.arrival_times[job_id])
@@ -241,17 +227,26 @@ def Complete_Service_2(s: Simulation, job_id: JobID):
         Start_Service_2(s, next_job_id)
 
 
+def Exponential_Random(rate: float) -> float:
+    U = random.random()
+    return -math.log(1 - U) / rate
+
+
 def Simulation_Run(
     s: Simulation,
-) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
+) -> tuple[dict[int, float], dict[int, float], dict[int, float], list[float]]:
     q1_freq: defaultdict[int, float] = defaultdict(lambda: 0)
     q2_freq: defaultdict[int, float] = defaultdict(lambda: 0)
     sys_freq: defaultdict[int, float] = defaultdict(lambda: 0)
 
+    Event_Log_Open(s)
+
     Arrival(s)
-    while ((not Event_Stack_Is_Empty(s.es)) and
-           (event := Event_Stack_Pop(s.es)) and
-           (event.time < s.DURATION)):
+    while (
+        (not Event_Stack_Is_Empty(s.es))
+        and (event := Event_Stack_Pop(s.es))
+        and (event.time < s.DURATION)
+    ):
 
         elapsed = event.time - s.clock
 
@@ -282,7 +277,22 @@ def Simulation_Run(
     assert max(q2_freq.keys()) == len(q2_freq.keys()) - 1
     assert max(sys_freq.keys()) == len(sys_freq.keys()) - 1
 
-    return q1_freq, q2_freq, sys_freq
+    return q1_freq, q2_freq, sys_freq, s.sojourn_times
+
+
+def Parse_Phase_Dist(s: str) -> Optional[PhaseDist]:
+    try:
+        return float(s)
+    except:
+        try:
+            d = ast.literal_eval(s)
+
+            alpha = d[0]
+            trans = d[1]
+
+            return alpha, trans
+        except:
+            return None
 
 
 def Get_Config():
@@ -291,8 +301,7 @@ def Get_Config():
     parser.add_argument("--arrival-rate", type=float, default=2)
     parser.add_argument("--service-rate-1", type=float, default=9)
     parser.add_argument("--service-rate-2", type=float, default=10)
-    parser.add_argument("--rng-seed", type=int,
-                        default=random.randrange(sys.maxsize))
+    parser.add_argument("--rng-seed", type=int, default=random.randrange(sys.maxsize))
 
     args = parser.parse_args()
 
@@ -313,65 +322,6 @@ def Get_Config():
     )
 
 
-def main():
-    duration, arrival_rate, service_rate_1, service_rate_2, rng_seed = Get_Config()
-
-    sim_id = f"{duration}-{arrival_rate}-{service_rate_1}-{service_rate_2}-{rng_seed}"
-
-    event_log_file_name = Event_Log_Open(sim_id)
-
-    s = Simulation(
-        DURATION=duration,
-        ARRIVAL_RATE=arrival_rate,
-        SERVICE_RATE_1=service_rate_1,
-        SERVICE_RATE_2=service_rate_2,
-    )
-
-    random.seed(rng_seed)
-
-    q1_freq, q2_freq, sys_freq = Simulation_Run(s)
-
-    q1_probs = Freq_To_Prob(q1_freq)
-    q2_probs = Freq_To_Prob(q2_freq)
-    sys_probs = Freq_To_Prob(sys_freq)
-
-    Verify_Jacksons_Theorem(sim_id,
-                            q1_probs,
-                            q2_probs,
-                            sys_probs,
-
-                            arrival_rate,
-                            service_rate_1,
-                            service_rate_2,
-                            )
-
-    print()
-
-    avg_sojourn_time, sd_sojourn_time, _ = Expected_Value_List(s.sojourn_times)
-    avg_sojourn_time_exp = 1 / (s.SERVICE_RATE_1 - s.ARRIVAL_RATE)
-    avg_sojourn_time_exp += 1 / (s.SERVICE_RATE_2 - s.ARRIVAL_RATE)
-
-    avg_num_jobs, sd_num_jobs, _ = Expected_Value_Dist(sys_freq)
-    avg_num_jobs_exp = s.ARRIVAL_RATE * avg_sojourn_time_exp
-
-    print(f"Total jobs inbound   = {s.total_jobs}")
-    print(f"Total jobs completed = {s.comp_jobs}")
-    print()
-    print(f"Average Sojourn Time (measured) = {avg_sojourn_time:.5f}s")
-    print(f"             Standard Deviation = {sd_sojourn_time:.5f}s")
-    print(f"Average Sojourn Time (expected) = {avg_sojourn_time_exp:.5f}s")
-    print()
-    print(f"Average number of jobs in system (measured) = {avg_num_jobs:.5f}")
-    print(f"                         Standard Deviation = {sd_num_jobs:.5f}")
-    print(
-        f"Average number of jobs in system (expected) = {avg_num_jobs_exp:.5f}")
-    print()
-
-    print(f"Refer {event_log_file_name} for event log")
-
-    Event_Log_Close()
-
-
 def Freq_To_Prob(freq_dist: dict[int, float]) -> dict[int, float]:
     prob_dist: dict[int, float] = {}
     total_freq = 0
@@ -390,7 +340,7 @@ def Expected_Value_List(l: list[float]) -> tuple[float, float, float]:
     variance: float = sum((x - mean) ** 2 for x in l)
     variance /= len(l)
 
-    sd = variance ** 0.5
+    sd = variance**0.5
 
     zstar = 1.96  # large distribution
 
@@ -408,54 +358,24 @@ def Expected_Value_Dist(dist: dict[int, float]) -> tuple[float, float, float]:
     variance = sum(freq * (x - mean) ** 2 for x, freq in dist.items())
     variance /= total_freq
 
-    sd = variance ** 0.5
+    sd = variance**0.5
 
     zstar = 1.96  # large distribution
 
-    moe = zstar * sd / (total_freq ** 0.5)
+    moe = zstar * sd / (total_freq**0.5)
 
     return mean, sd, moe
 
 
-def Verify_Jacksons_Theorem(
-    sim_id: str,
+def Dist_Print(
     q1_probs: dict[int, float],
     q2_probs: dict[int, float],
     sys_probs: dict[int, float],
-
-    arrival_rate: float,
-    service_rate_1: float,
-    service_rate_2: float,
 ):
-
-    q1_cal_probs: dict[int, float] = {}
-    rho1 = arrival_rate / service_rate_1
-    q1_cal_probs[0] = 1 - rho1
-    for k in range(1, len(q1_probs)):
-        q1_cal_probs[k] = q1_cal_probs[k - 1] * rho1
-
-    q2_cal_probs: dict[int, float] = {}
-    rho2 = arrival_rate / service_rate_2
-    q2_cal_probs[0] = 1 - rho2
-    for k in range(1, len(q2_probs)):
-        q2_cal_probs[k] = q2_cal_probs[k - 1] * rho2
-
-    sys_cal_probs: dict[int, float] = {}
-    for sys_len in sys_probs.keys():
-        sys_cal_probs[sys_len] = 0
-        for i in range(0, sys_len + 1):
-            q1_len = i
-            q2_len = sys_len - i
-
-            if q1_len in q1_cal_probs and q2_len in q2_cal_probs:
-                prob = q1_cal_probs[q1_len] * q2_cal_probs[q2_len]
-                sys_cal_probs[sys_len] += prob
-
     most_len = max(len(q1_probs), len(q2_probs), len(sys_probs)) + 1
 
     format_string = "| {:<4} | {:<8} | {:<8} | {:<8} |"
 
-    print("Equilibrium State Probability Distribution")
     print(
         format_string.format(
             "Size",
@@ -465,9 +385,6 @@ def Verify_Jacksons_Theorem(
         )
     )
 
-    print("|                                       |")
-    print("|      Distribution from Simulation     |")
-    print("|                                       |")
     for i in range(most_len):
         print(
             format_string.format(
@@ -478,21 +395,4 @@ def Verify_Jacksons_Theorem(
             )
         )
 
-    print("|                                       |")
-    print("|  Distribution from Jackson's Theorem  |")
-    print("|                                       |")
-
-    for i in range(most_len):
-        print(
-            format_string.format(
-                i,
-                "{:.5f}".format(q1_cal_probs.get(i, 0)),
-                "{:.5f}".format(q2_cal_probs.get(i, 0)),
-                "{:.5f}".format(sys_cal_probs.get(i, 0)),
-            )
-        )
     print("|_______________________________________|")
-
-
-if __name__ == "__main__":
-    main()
