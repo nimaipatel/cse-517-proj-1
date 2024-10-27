@@ -24,13 +24,10 @@ from dataclasses import dataclass, field
 import math
 import random
 from enum import Enum, auto
-import sys
-from typing import List, NewType, Optional, Union, Callable
-import argparse
-import ast
+from typing import List, NewType, Optional, Callable
 
 JobID = NewType("JobID", int)
-PhaseDist = Union[float, tuple[list[float], list[list[float]]]]
+PhaseDist = tuple[list[float], list[list[float]]]
 
 
 class EventType(Enum):
@@ -278,48 +275,6 @@ def Simulation_Run(
     assert max(sys_freq.keys()) == len(sys_freq.keys()) - 1
 
     return q1_freq, q2_freq, sys_freq, s.sojourn_times
-
-
-def Parse_Phase_Dist(s: str) -> Optional[PhaseDist]:
-    try:
-        return float(s)
-    except:
-        try:
-            d = ast.literal_eval(s)
-
-            alpha = d[0]
-            trans = d[1]
-
-            return alpha, trans
-        except:
-            return None
-
-
-def Get_Config():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--duration", type=float, default=10_000)
-    parser.add_argument("--arrival-rate", type=float, default=2)
-    parser.add_argument("--service-rate-1", type=float, default=9)
-    parser.add_argument("--service-rate-2", type=float, default=10)
-    parser.add_argument("--rng-seed", type=int, default=random.randrange(sys.maxsize))
-
-    args = parser.parse_args()
-
-    print(f"Print help using `{sys.argv[0]} -h` to modify these values...")
-    print(f"Duration       = {args.duration}s")
-    print(f"Arrival Rate   = {args.arrival_rate} job/s")
-    print(f"Service Rate 1 = {args.service_rate_1} job/s")
-    print(f"Service Rate 2 = {args.service_rate_2} job/s")
-    print(f"RNG Seed       = {args.rng_seed}")
-    print()
-
-    return (
-        args.duration,
-        args.arrival_rate,
-        args.service_rate_1,
-        args.service_rate_2,
-        args.rng_seed,
-    )
 
 
 def Freq_To_Prob(freq_dist: dict[int, float]) -> dict[int, float]:
