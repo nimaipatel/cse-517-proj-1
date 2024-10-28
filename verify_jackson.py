@@ -25,8 +25,8 @@ from queues import (
     Dist_Print,
     Expected_Value_Dist,
     Expected_Value_List,
-    Exponential_Random,
     Freq_To_Prob,
+    Get_Exponential_Dist,
     Simulation,
     Simulation_Run,
 )
@@ -42,9 +42,9 @@ def main():
 
     s = Simulation(
         DURATION=1000,
-        ARRIVAL_DIST=lambda: Exponential_Random(arrival_rate),
-        SERVICE_1_DIST=lambda: Exponential_Random(service_rate_1),
-        SERVICE_2_DIST=lambda: Exponential_Random(service_rate_2),
+        ARRIVAL_DIST=Get_Exponential_Dist(arrival_rate),
+        SERVICE_1_DIST=Get_Exponential_Dist(service_rate_1),
+        SERVICE_2_DIST=Get_Exponential_Dist(service_rate_2),
         LOG_FILE_NAME=LOG_FILE_NAME,
     )
 

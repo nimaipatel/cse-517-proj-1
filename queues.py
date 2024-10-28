@@ -266,10 +266,6 @@ def Get_Phase_Type_Dist(
         # every transient state to the single abosorbing state...
         T[state][len(S)] = -sum(S[state])
 
-    print(alpha)
-    print(rates)
-    print(T)
-
     return lambda: Phase_Type_Random(alpha, rates, T)
 
 
@@ -286,6 +282,8 @@ def Get_Erlang_Dist(k: int, lam: float) -> Callable[[], float]:
 
     return Get_Phase_Type_Dist(alpha, S)
 
+def Get_Exponential_Dist(lam: float) -> Callable[[], float]:
+    return Get_Phase_Type_Dist([1.0], [[-lam]])
 
 def Simulation_Run(
     s: Simulation,

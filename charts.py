@@ -57,7 +57,7 @@ def Plot_Stats(plt, means: List[float], margins_of_error: List[float], labels: L
     plt.legend()
 
 
-def Plot_Varying():
+def Plot_Varying_Exponential_Arrival():
     _, axes = plt.subplots(1, 2, figsize=(20, 14))  # type: ignore
 
     sojourn_times_means: List[float] = []
@@ -116,7 +116,7 @@ def Plot_Varying():
     print("Generated varying_arrival.png...")
 
 
-def Plot_Varying_Service_1():
+def Plot_Varying_Exponential_Service_1():
     _, axes = plt.subplots(1, 2, figsize=(20, 14))  # type: ignore
 
     sojourn_times_means: List[float] = []
@@ -177,7 +177,7 @@ def Plot_Varying_Service_1():
     print("Generated varying_1.png...")
 
 
-def Plot_Varying_Service_2():
+def Plot_Varying_Exponential_Service_2():
     _, axes = plt.subplots(1, 2, figsize=(20, 14))  # type: ignore
 
     sojourn_times_means: List[float] = []
@@ -239,7 +239,7 @@ def Plot_Varying_Service_2():
     print("Generated varying_2.png...")
 
 
-def Plot_Varying_Service_Both():
+def Plot_Varying_Exponential_Service_Both():
     _, axes = plt.subplots(1, 2, figsize=(20, 14))  # type: ignore
 
     sojourn_times_means: List[float] = []
@@ -302,11 +302,15 @@ def Plot_Varying_Service_Both():
     print("Generated varying_both.png...")
 
 
+def Plot_Varying_Arrival_Dist_Constant_Mean():
+    pass
+
+
 def main():
-    Plot_Varying()
-    Plot_Varying_Service_1()
-    Plot_Varying_Service_2()
-    Plot_Varying_Service_Both()
+    Plot_Varying_Exponential_Arrival()
+    Plot_Varying_Exponential_Service_1()
+    Plot_Varying_Exponential_Service_2()
+    Plot_Varying_Exponential_Service_Both()
 
 
 if __name__ == "__main__":
