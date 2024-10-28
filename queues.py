@@ -21,6 +21,7 @@
 from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
+import itertools
 import math
 import random
 from enum import Enum, auto
@@ -227,6 +228,35 @@ def Complete_Service_2(s: Simulation, job_id: JobID):
 def Exponential_Random(rate: float) -> float:
     U = random.random()
     return -math.log(1 - U) / rate
+
+
+def Gen_To_Trans(S: list[list[float]]) -> list[list[float]]:
+    T = [[0.0] * (len(S) + 1) for _ in range(len(S))]
+
+    for state, next_state in itertools.product(range(len(S)), repeat=2):
+        # every transient state to every other transient state...
+        if state != next_state:
+            T[state][next_state] = S[state][next_state]
+
+    for state in range(len(S)):
+        # every transient state to single abosorbing state...
+        T[state][len(S)] = -sum(S[state])
+
+    return T
+
+
+def Phase_Type_Random(alpha: list[float], S: list[list[float]]):
+    state = random.choices(range(len(alpha)), weights=alpha)[0]
+    time = 0.0
+
+    T = Gen_To_Trans(S)
+
+    time = 0.0
+    while state < len(S):
+        time += Exponential_Random(-S[state][state])
+        state = random.choices(range(len(T[state])), weights=T[state])[0]
+
+    return time
 
 
 def Simulation_Run(
