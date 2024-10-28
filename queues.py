@@ -230,7 +230,31 @@ def Exponential_Random(rate: float) -> float:
     return -math.log(1 - U) / rate
 
 
-def Gen_To_Trans(S: list[list[float]]) -> list[list[float]]:
+def Phase_Type_Random(alpha: list[float], rates: list[float], T: list[list[float]]):
+    N_states = len(alpha)
+    state = random.choices(range(N_states), weights=alpha)[0]
+
+    time = 0.0
+    while state < len(rates):
+        time += Exponential_Random(rates[state])
+        state = random.choices(range(N_states + 1), weights=T[state])[0]
+
+    return time
+
+
+def Get_Phase_Type_Dist(
+    alpha: list[float], S: list[list[float]]
+) -> Callable[[], float]:
+    N_states = len(alpha)
+
+    assert len(S) == N_states
+    for state in range(len(S)):
+        assert len(S[state]) == N_states
+        assert S[state][state] <= 0
+        assert sum(S[state]) <= 0
+
+    rates = [-S[state][state] for state in range(len(S))]
+
     T = [[0.0] * (len(S) + 1) for _ in range(len(S))]
 
     for state, next_state in itertools.product(range(len(S)), repeat=2):
@@ -239,24 +263,28 @@ def Gen_To_Trans(S: list[list[float]]) -> list[list[float]]:
             T[state][next_state] = S[state][next_state]
 
     for state in range(len(S)):
-        # every transient state to single abosorbing state...
+        # every transient state to the single abosorbing state...
         T[state][len(S)] = -sum(S[state])
 
-    return T
+    print(alpha)
+    print(rates)
+    print(T)
+
+    return lambda: Phase_Type_Random(alpha, rates, T)
 
 
-def Phase_Type_Random(alpha: list[float], S: list[list[float]]):
-    state = random.choices(range(len(alpha)), weights=alpha)[0]
-    time = 0.0
+def Get_Erlang_Dist(k: int, lam: float) -> Callable[[], float]:
+    alpha = [1.0] + [0.0] * (k - 1)
 
-    T = Gen_To_Trans(S)
+    S: list[list[float]] = []
+    for i in range(k):
+        row = [0.0 for _ in range(k)]
+        row[i] = -lam
+        if i + 1 < len(row):
+            row[i + 1] = lam
+        S.append(row)
 
-    time = 0.0
-    while state < len(S):
-        time += Exponential_Random(-S[state][state])
-        state = random.choices(range(len(T[state])), weights=T[state])[0]
-
-    return time
+    return Get_Phase_Type_Dist(alpha, S)
 
 
 def Simulation_Run(
