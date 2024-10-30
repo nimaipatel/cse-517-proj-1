@@ -26,7 +26,6 @@
 import matplotlib.pyplot as plt
 from typing import List
 from queue_simulation import (
-    Exponential_Random,
     Get_Erlang_Dist,
     Get_Exponential_Dist,
     Simulation,
@@ -76,13 +75,15 @@ def Plot_Varying_Exponential_Arrival():
 
         s = Simulation(
             DURATION=1000,
-            ARRIVAL_DIST=lambda: Exponential_Random(lam),
-            SERVICE_1_DIST=lambda: Exponential_Random(mu1),
-            SERVICE_2_DIST=lambda: Exponential_Random(mu2),
+            ARRIVAL_DIST=Get_Exponential_Dist(lam),
+            SERVICE_DIST=[
+                Get_Exponential_Dist(mu1),
+                Get_Exponential_Dist(mu2),
+            ],
             LOG_FILE_NAME=None,
         )
 
-        _, _, sys_freq, _ = Simulation_Run(s)
+        _, sys_freq, _ = Simulation_Run(s)
         avg_sojourn_time, _, moe_sojourn_time = Expected_Value_List(s.sojourn_times)
         avg_num_jobs, _, moe_num_jobs = Expected_Value_Dist(sys_freq)
 
@@ -135,13 +136,15 @@ def Plot_Varying_Exponential_Service_1():
 
         s = Simulation(
             DURATION=1000,
-            ARRIVAL_DIST=lambda: Exponential_Random(lam),
-            SERVICE_1_DIST=lambda: Exponential_Random(mu1),
-            SERVICE_2_DIST=lambda: Exponential_Random(mu2),
+            ARRIVAL_DIST=Get_Exponential_Dist(lam),
+            SERVICE_DIST=[
+                Get_Exponential_Dist(mu1),
+                Get_Exponential_Dist(mu2),
+            ],
             LOG_FILE_NAME=None,
         )
 
-        _, _, sys_freq, _ = Simulation_Run(s)
+        _, sys_freq, _ = Simulation_Run(s)
 
         avg_sojourn_time, _, moe_sojourn_time = Expected_Value_List(s.sojourn_times)
         avg_num_jobs, _, moe_num_jobs = Expected_Value_Dist(sys_freq)
@@ -196,13 +199,15 @@ def Plot_Varying_Exponential_Service_2():
 
         s = Simulation(
             DURATION=1000,
-            ARRIVAL_DIST=lambda: Exponential_Random(lam),
-            SERVICE_1_DIST=lambda: Exponential_Random(mu1),
-            SERVICE_2_DIST=lambda: Exponential_Random(mu2),
+            ARRIVAL_DIST=Get_Exponential_Dist(lam),
+            SERVICE_DIST=[
+                Get_Exponential_Dist(mu1),
+                Get_Exponential_Dist(mu2),
+            ],
             LOG_FILE_NAME=None,
         )
 
-        _, _, sys_freq, _ = Simulation_Run(s)
+        _, sys_freq, _ = Simulation_Run(s)
 
         avg_sojourn_time, _, moe_sojourn_time = Expected_Value_List(s.sojourn_times)
         avg_num_jobs, _, moe_num_jobs = Expected_Value_Dist(sys_freq)
@@ -259,13 +264,15 @@ def Plot_Varying_Exponential_Service_Both():
 
         s = Simulation(
             DURATION=1000,
-            ARRIVAL_DIST=lambda: Exponential_Random(lam),
-            SERVICE_1_DIST=lambda: Exponential_Random(mu1),
-            SERVICE_2_DIST=lambda: Exponential_Random(mu2),
+            ARRIVAL_DIST=Get_Exponential_Dist(lam),
+            SERVICE_DIST=[
+                Get_Exponential_Dist(mu1),
+                Get_Exponential_Dist(mu2),
+            ],
             LOG_FILE_NAME=None,
         )
 
-        _, _, sys_freq, _ = Simulation_Run(s)
+        _, sys_freq, _ = Simulation_Run(s)
 
         avg_sojourn_time, _, moe_sojourn_time = Expected_Value_List(s.sojourn_times)
         avg_num_jobs, _, moe_num_jobs = Expected_Value_Dist(sys_freq)
@@ -321,12 +328,14 @@ def Plot_Varying_Erlang_Arrival_Dist_Constant_Mean():
         s = Simulation(
             DURATION=1000,
             ARRIVAL_DIST=Get_Erlang_Dist(k, lam),
-            SERVICE_1_DIST=Get_Exponential_Dist(10),
-            SERVICE_2_DIST=Get_Exponential_Dist(11),
+            SERVICE_DIST=[
+                Get_Exponential_Dist(10),
+                Get_Exponential_Dist(11),
+            ],
             LOG_FILE_NAME=None,
         )
 
-        _, _, sys_freq, sojourn_times = Simulation_Run(s)
+        _, sys_freq, sojourn_times = Simulation_Run(s)
 
         avg_sojourn_time, _, moe_sojourn_time = Expected_Value_List(sojourn_times)
         avg_num_jobs, _, moe_num_jobs = Expected_Value_Dist(sys_freq)

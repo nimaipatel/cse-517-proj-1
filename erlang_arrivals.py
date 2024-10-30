@@ -35,12 +35,14 @@ for k in range(1, 10):
     s = Simulation(
         DURATION=1000,
         ARRIVAL_DIST=Get_Exponential_Dist(2),
-        SERVICE_1_DIST=Get_Exponential_Dist(10),
-        SERVICE_2_DIST=Get_Exponential_Dist(11),
+        SERVICE_DIST=[
+            Get_Exponential_Dist(10),
+            Get_Exponential_Dist(11),
+        ],
         LOG_FILE_NAME=None,
     )
 
-    q1_freq, q2_freq, sys_freq, sojourn_times = Simulation_Run(s)
+    [q1_freq, q2_freq], sys_freq, sojourn_times = Simulation_Run(s)
     q1_probs = Freq_To_Prob(q1_freq)
     q2_probs = Freq_To_Prob(q2_freq)
     sys_probs = Freq_To_Prob(sys_freq)

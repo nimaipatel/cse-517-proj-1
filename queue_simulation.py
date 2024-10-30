@@ -33,10 +33,8 @@ PhaseDist = tuple[list[float], list[list[float]]]
 
 class EventType(Enum):
     ARRIVAL = auto()
-    START_SERVICE_1 = auto()
-    COMPLETE_SERVICE_1 = auto()
-    START_SERVICE_2 = auto()
-    COMPLETE_SERVICE_2 = auto()
+    START = auto()
+    COMPLETE = auto()
 
 
 @dataclass
@@ -44,6 +42,7 @@ class Event:
     time: float
     type: EventType
     job_id: JobID
+    queue_index: int
 
 
 @dataclass
@@ -60,22 +59,23 @@ class EventStack:
 
 
 @dataclass
+class QueueState:
+    q: List[JobID] = field(default_factory=list)
+    busy = False
+
+
+@dataclass
 class Simulation:
     # Constants
     DURATION: float
-    ARRIVAL_DIST: Callable[
-        [], float
-    ]  # yeah, function pointers are slow, but guess what? we are using Python
-    SERVICE_1_DIST: Callable[[], float]
-    SERVICE_2_DIST: Callable[[], float]
+    # yeah, function pointers are slow, but we are already using Python...
+    ARRIVAL_DIST: Callable[[], float]
+    SERVICE_DIST: list[Callable[[], float]]
     LOG_FILE_NAME: Optional[str]
 
     # State
     clock: float = 0
-    q1: List[JobID] = field(default_factory=list)
-    q2: List[JobID] = field(default_factory=list)
-    server_1_busy = False
-    server_2_busy = False
+    queue_states: list[QueueState] = field(default_factory=list)
     es = EventStack()
 
     # ...state for performance metrics
@@ -83,6 +83,9 @@ class Simulation:
     comp_jobs = 0
     sojourn_times: List[float] = field(default_factory=list)
     arrival_times: dict[JobID, float] = field(default_factory=dict)
+
+    def __post_init__(self):
+        self.queue_states = [QueueState() for _ in range(len(self.SERVICE_DIST))]
 
 
 def Event_Log_Open(s: Simulation):
@@ -94,13 +97,16 @@ def Event_Log_Open(s: Simulation):
 
 
 def Event_Log_Record(
-    s: Simulation, job_id: JobID, event: EventType, time: float
+    s: Simulation, queue_index: int, job_id: JobID, event: EventType, time: float
 ) -> None:
     if s.LOG_FILE_NAME is None:
         return
 
     with open(s.LOG_FILE_NAME, "a") as f:
-        f.write(f"{job_id}, {event.name}, {time}\n")
+        event_str = event.name
+        if event != EventType.ARRIVAL:
+            event_str += f" {queue_index}"
+        f.write(f"{job_id}, {event_str}, {time}\n")
 
 
 def Event_Stack_Is_Empty(es: EventStack):
@@ -166,63 +172,48 @@ def Arrival(s: Simulation):
     job_id = JobID(s.total_jobs)
     s.arrival_times[job_id] = s.clock
 
-    Event_Log_Record(s, job_id, EventType.ARRIVAL, s.clock)
+    Event_Log_Record(s, 0, job_id, EventType.ARRIVAL, s.clock)
 
-    if s.server_1_busy:
-        s.q1.append(job_id)
+    if s.queue_states[0].busy:
+        s.queue_states[0].q.append(job_id)
     else:
-        Start_Service_1(s, job_id)
+        Start_Service(s, 0, job_id)
 
     inter_arrival_time = s.ARRIVAL_DIST()
-    next_arrival_event = Event(s.clock + inter_arrival_time, EventType.ARRIVAL, job_id)
+    next_arrival_event = Event(
+        s.clock + inter_arrival_time, EventType.ARRIVAL, job_id, 0
+    )
     Event_Stack_Insert(s.es, next_arrival_event)
 
 
-def Start_Service_1(s: Simulation, job_id: JobID):
-    Event_Log_Record(s, job_id, EventType.START_SERVICE_1, s.clock)
+def Start_Service(s: Simulation, queue_index: int, job_id: JobID):
+    Event_Log_Record(s, queue_index, job_id, EventType.START, s.clock)
 
-    s.server_1_busy = True
+    s.queue_states[queue_index].busy = True
 
-    serv_time = s.SERVICE_1_DIST()
-    event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_1, job_id)
+    serv_time = s.SERVICE_DIST[queue_index]()
+    event = Event(s.clock + serv_time, EventType.COMPLETE, job_id, queue_index)
     Event_Stack_Insert(s.es, event)
 
 
-def Complete_Service_1(s: Simulation, job_id: JobID):
-    Event_Log_Record(s, job_id, EventType.COMPLETE_SERVICE_1, s.clock)
+def Complete_Service(s: Simulation, queue_index: int, job_id: JobID):
+    Event_Log_Record(s, queue_index, job_id, EventType.COMPLETE, s.clock)
 
-    s.server_1_busy = False
+    s.queue_states[queue_index].busy = False
 
-    if s.server_2_busy:
-        s.q2.append(job_id)
+    next_queue_index = queue_index + 1
+    if next_queue_index < len(s.queue_states):
+        if s.queue_states[next_queue_index].busy:
+            s.queue_states[next_queue_index].q.append(job_id)
+        else:
+            Start_Service(s, next_queue_index, job_id)
     else:
-        Start_Service_2(s, job_id)
+        s.sojourn_times.append(s.clock - s.arrival_times[job_id])
+        s.comp_jobs += 1
 
-    if len(s.q1) > 0:
-        next_job_id = s.q1.pop(0)
-        Start_Service_1(s, next_job_id)
-
-
-def Start_Service_2(s: Simulation, job_id: JobID):
-    Event_Log_Record(s, job_id, EventType.START_SERVICE_2, s.clock)
-    s.server_2_busy = True
-
-    serv_time = s.SERVICE_2_DIST()
-    event = Event(s.clock + serv_time, EventType.COMPLETE_SERVICE_2, job_id)
-    Event_Stack_Insert(s.es, event)
-
-
-def Complete_Service_2(s: Simulation, job_id: JobID):
-    Event_Log_Record(s, job_id, EventType.COMPLETE_SERVICE_2, s.clock)
-    s.server_2_busy = False
-
-    s.sojourn_times.append(s.clock - s.arrival_times[job_id])
-
-    s.comp_jobs += 1
-
-    if len(s.q2) > 0:
-        next_job_id = s.q2.pop(0)
-        Start_Service_2(s, next_job_id)
+    if len(s.queue_states[queue_index].q) > 0:
+        next_job_id = s.queue_states[queue_index].q.pop(0)
+        Start_Service(s, queue_index, next_job_id)
 
 
 def Exponential_Random(rate: float) -> float:
@@ -286,11 +277,10 @@ def Get_Exponential_Dist(lam: float) -> Callable[[], float]:
     return Get_Phase_Type_Dist([1.0], [[-lam]])
 
 
-def Simulation_Run(
-    s: Simulation,
-) -> tuple[dict[int, float], dict[int, float], dict[int, float], list[float]]:
-    q1_freq: defaultdict[int, float] = defaultdict(lambda: 0)
-    q2_freq: defaultdict[int, float] = defaultdict(lambda: 0)
+def Simulation_Run(s: Simulation):
+    qs_freq: list[defaultdict[int, float]] = [
+        defaultdict(lambda: 0) for _ in range(len(s.queue_states))
+    ]
     sys_freq: defaultdict[int, float] = defaultdict(lambda: 0)
 
     Event_Log_Open(s)
@@ -304,34 +294,32 @@ def Simulation_Run(
 
         elapsed = event.time - s.clock
 
-        n1 = len(s.q1)
-        if s.server_1_busy:
-            n1 += 1
+        total_n = 0
+        for i in range(len(s.queue_states)):
+            n = len(s.queue_states[i].q)
+            if s.queue_states[i].busy:
+                n += 1
 
-        n2 = len(s.q2)
-        if s.server_2_busy:
-            n2 += 1
+            total_n += n
 
-        q1_freq[n1] += elapsed
-        q2_freq[n2] += elapsed
-        sys_freq[n1 + n2] += elapsed
+            qs_freq[i][n] += elapsed
+
+        sys_freq[total_n] += elapsed
 
         s.clock = event.time
 
         if event.type == EventType.ARRIVAL:
             Arrival(s)
-        elif event.type == EventType.COMPLETE_SERVICE_1:
-            Complete_Service_1(s, event.job_id)
-        elif event.type == EventType.COMPLETE_SERVICE_2:
-            Complete_Service_2(s, event.job_id)
+        elif event.type == EventType.COMPLETE:
+            Complete_Service(s, event.queue_index, event.job_id)
         else:
             assert False, "UNREACHABLE"
 
-    assert max(q1_freq.keys()) == len(q1_freq.keys()) - 1
-    assert max(q2_freq.keys()) == len(q2_freq.keys()) - 1
+    for i in range(len(s.queue_states)):
+        assert max(qs_freq[i].keys()) == len(qs_freq[i].keys()) - 1
     assert max(sys_freq.keys()) == len(sys_freq.keys()) - 1
 
-    return q1_freq, q2_freq, sys_freq, s.sojourn_times
+    return qs_freq, sys_freq, s.sojourn_times
 
 
 def Freq_To_Prob(freq_dist: dict[int, float]) -> dict[int, float]:

@@ -43,12 +43,14 @@ def main():
     s = Simulation(
         DURATION=1000,
         ARRIVAL_DIST=Get_Exponential_Dist(arrival_rate),
-        SERVICE_1_DIST=Get_Exponential_Dist(service_rate_1),
-        SERVICE_2_DIST=Get_Exponential_Dist(service_rate_2),
+        SERVICE_DIST=[
+            Get_Exponential_Dist(service_rate_1),
+            Get_Exponential_Dist(service_rate_2),
+        ],
         LOG_FILE_NAME=LOG_FILE_NAME,
     )
 
-    q1_freq, q2_freq, sys_freq, sojourn_times = Simulation_Run(s)
+    [q1_freq, q2_freq], sys_freq, sojourn_times = Simulation_Run(s)
 
     q1_probs = Freq_To_Prob(q1_freq)
     q2_probs = Freq_To_Prob(q2_freq)
