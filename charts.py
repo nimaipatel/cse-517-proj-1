@@ -25,8 +25,10 @@
 
 import matplotlib.pyplot as plt
 from typing import List
-from queues import (
+from queue_simulation import (
     Exponential_Random,
+    Get_Erlang_Dist,
+    Get_Exponential_Dist,
     Simulation,
     Simulation_Run,
     Expected_Value_List,
@@ -302,8 +304,65 @@ def Plot_Varying_Exponential_Service_Both():
     print("Generated varying_both.png...")
 
 
-def Plot_Varying_Arrival_Dist_Constant_Mean():
-    pass
+def Plot_Varying_Erlang_Arrival_Dist_Constant_Mean():
+    _, axes = plt.subplots(1, 2, figsize=(20, 14))  # type: ignore
+
+    sojourn_times_means: List[float] = []
+    sojourn_times_moes: List[float] = []
+
+    num_jobs_means: List[float] = []
+    num_jobs_moes: List[float] = []
+
+    labels: List[str] = []
+
+    mean = 5
+    for k in range(1, 20):
+        lam = k / mean
+        s = Simulation(
+            DURATION=1000,
+            ARRIVAL_DIST=Get_Erlang_Dist(k, lam),
+            SERVICE_1_DIST=Get_Exponential_Dist(10),
+            SERVICE_2_DIST=Get_Exponential_Dist(11),
+            LOG_FILE_NAME=None,
+        )
+
+        _, _, sys_freq, sojourn_times = Simulation_Run(s)
+
+        avg_sojourn_time, _, moe_sojourn_time = Expected_Value_List(sojourn_times)
+        avg_num_jobs, _, moe_num_jobs = Expected_Value_Dist(sys_freq)
+
+        sojourn_times_means.append(avg_sojourn_time)
+        sojourn_times_moes.append(moe_sojourn_time)
+
+        num_jobs_means.append(avg_num_jobs)
+        num_jobs_moes.append(moe_num_jobs)
+
+        labels.append(f"k={k},λ={lam}")
+
+    title = "Varying Erlang-k Distributions for arrivals with equal means"
+
+    Plot_Stats(
+        axes[0],  # type: ignore
+        sojourn_times_means,
+        sojourn_times_moes,
+        labels,
+        title,
+        "sojourn time (s)",
+        "Erlang Distribution Parameters",
+    )
+    Plot_Stats(
+        axes[1],  # type: ignore
+        num_jobs_means,
+        num_jobs_moes,
+        labels,
+        title,
+        "number of jobs",
+        "Erlang Distribution Parameters",
+    )
+
+    plt.tight_layout()
+    plt.savefig("constant_mean_arrival_erlang.png", format="png")
+    print("Generated constant_mean_arrival_erlang.png...")
 
 
 def main():
@@ -311,6 +370,7 @@ def main():
     Plot_Varying_Exponential_Service_1()
     Plot_Varying_Exponential_Service_2()
     Plot_Varying_Exponential_Service_Both()
+    Plot_Varying_Erlang_Arrival_Dist_Constant_Mean()
 
 
 if __name__ == "__main__":

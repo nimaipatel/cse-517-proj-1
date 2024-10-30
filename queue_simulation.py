@@ -231,13 +231,12 @@ def Exponential_Random(rate: float) -> float:
 
 
 def Phase_Type_Random(alpha: list[float], rates: list[float], T: list[list[float]]):
-    N_states = len(alpha)
-    state = random.choices(range(N_states), weights=alpha)[0]
+    state = random.choices(range(len(alpha)), weights=alpha)[0]
 
     time = 0.0
     while state < len(rates):
         time += Exponential_Random(rates[state])
-        state = random.choices(range(N_states + 1), weights=T[state])[0]
+        state = random.choices(range(len(T[state])), weights=T[state])[0]
 
     return time
 
@@ -282,8 +281,10 @@ def Get_Erlang_Dist(k: int, lam: float) -> Callable[[], float]:
 
     return Get_Phase_Type_Dist(alpha, S)
 
+
 def Get_Exponential_Dist(lam: float) -> Callable[[], float]:
     return Get_Phase_Type_Dist([1.0], [[-lam]])
+
 
 def Simulation_Run(
     s: Simulation,

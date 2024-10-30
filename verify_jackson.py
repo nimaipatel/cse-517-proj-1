@@ -21,7 +21,7 @@
 # This program has been developed and tested on Python 3.9.6
 
 import random
-from queues import (
+from queue_simulation import (
     Dist_Print,
     Expected_Value_Dist,
     Expected_Value_List,
