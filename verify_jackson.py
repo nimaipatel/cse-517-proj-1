@@ -93,7 +93,7 @@ def main():
     print(f"Average number of jobs in system (measured) = {avg_num_jobs:.5f}")
     print(f"Standard Deviation                          = {sd_num_jobs:.5f}")
     print(
-        f"95% Confidence interval                     = ({avg_num_jobs:.5f} ± {moe_num_jobs:.5f})s"
+        f"95% Confidence interval                     = ({avg_num_jobs:.5f} ± {moe_num_jobs:.5f})"
     )
     print()
 
