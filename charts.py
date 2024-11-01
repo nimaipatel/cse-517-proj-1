@@ -71,7 +71,7 @@ def Plot_Varying_Exponential_Arrival():
 
     mu1 = 8
     mu2 = 9
-    for lam in range(1, 6):
+    for lam in range(1, 7):
 
         s = Simulation(
             DURATION=1000,
@@ -131,8 +131,8 @@ def Plot_Varying_Exponential_Service_1():
     labels: List[str] = []
 
     lam = 1
-    mu2 = 3
-    for mu1 in range(3, 13):
+    mu2 = 6
+    for mu1 in range(3, 8):
 
         s = Simulation(
             DURATION=1000,
@@ -194,7 +194,7 @@ def Plot_Varying_Exponential_Service_2():
     labels: List[str] = []
 
     lam = 1
-    mu1 = 3
+    mu1 = 6
     for mu2 in range(3, 13):
 
         s = Simulation(
@@ -258,7 +258,7 @@ def Plot_Varying_Exponential_Service_Both():
     labels: List[str] = []
 
     lam = 1
-    for mu in range(3, 13):
+    for mu in range(3, 20):
         mu1 = mu
         mu2 = mu
 
@@ -323,7 +323,7 @@ def Plot_Varying_Erlang_Arrival_Dist_Constant_Mean():
     labels: List[str] = []
 
     mean = 5
-    for k in range(1, 20):
+    for k in range(1, 13):
         lam = k / mean
         s = Simulation(
             DURATION=1000,
@@ -346,7 +346,7 @@ def Plot_Varying_Erlang_Arrival_Dist_Constant_Mean():
         num_jobs_means.append(avg_num_jobs)
         num_jobs_moes.append(moe_num_jobs)
 
-        labels.append(f"k={k},λ={lam}")
+        labels.append(f"k={k},\nλ={lam}")
 
     title = "Varying Erlang-k Distributions for arrivals with equal means"
 
